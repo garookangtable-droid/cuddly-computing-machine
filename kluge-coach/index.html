@@ -1,63 +1,55 @@
 <title>클루지 관계 코치</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <style>
-/* Layout: 왼쪽 상황 입력, 오른쪽 분석 결과 (휴대폰에서는 위아래). 따뜻한 색 = 반사 뇌(오래된 뇌), 청록 = 숙고 뇌(새 뇌) */
+/* Layout: 왼쪽 상황 입력, 오른쪽 분석 결과 (휴대폰에서는 위아래).
+   검은 바탕에 선명한 주황 한 가지. 주황 = 반사하는 옛 뇌, 흰색 = 생각하는 새 뇌 */
 :root {
-  --bg: #EEF1F3;
-  --surface: #FFFFFF;
-  --sunken: #E4E8EC;
-  --ink: #18212C;
-  --muted: #586472;
-  --line: #D3D9DF;
-  --accent: #34459E;
-  --accent-ink: #FFFFFF;
-  --reflex: #B9482F;
-  --reflex-soft: #F6E3DE;
-  --reason: #23766D;
-  --reason-soft: #DCEFEC;
-  --warn: #8A5A00;
-  --warn-soft: #FBEFD5;
-  --font-display: "Gowun Batang", "Nanum Myeongjo", "AppleMyungjo", serif;
+  --bg: #0A0A0A;
+  --surface: #151515;
+  --sunken: #212121;
+  --ink: #F6F4F0;
+  --muted: #A29D96;
+  --line: #2F2F2F;
+  --accent: #FF6A00;
+  --accent-ink: #0A0A0A;
+  --reflex: #FF6A00;
+  --reflex-soft: #2B1505;
+  --reason: #F6F4F0;
+  --reason-soft: #262626;
+  --warn: #FFC23D;
+  --warn-soft: #2A2109;
+  --font-display: "Black Han Sans", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-quote: "Gowun Batang", "Nanum Myeongjo", "AppleMyungjo", serif;
   --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --step--1: 0.82rem;
   --step-0: 0.95rem;
-  --step-1: 1.12rem;
-  --step-2: 1.4rem;
-  --step-3: 1.9rem;
+  --step-1: 1.15rem;
+  --step-2: 1.45rem;
+  --step-3: 2.1rem;
   --radius: 10px;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #11161C; --surface: #19202A; --sunken: #222A35; --ink: #E5EAF0; --muted: #9AA5B2; --line: #2C3542;
-    --accent: #8E9CF2; --accent-ink: #10152A; --reflex: #EE8E77; --reflex-soft: #3A2520; --reason: #6CC6B8; --reason-soft: #18322F;
-    --warn: #E9B95A; --warn-soft: #362A12; color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #11161C; --surface: #19202A; --sunken: #222A35; --ink: #E5EAF0; --muted: #9AA5B2; --line: #2C3542;
-  --accent: #8E9CF2; --accent-ink: #10152A; --reflex: #EE8E77; --reflex-soft: #3A2520; --reason: #6CC6B8; --reason-soft: #18322F;
-  --warn: #E9B95A; --warn-soft: #362A12; color-scheme: dark;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: var(--step-0); line-height: 1.65; }
 .wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 18px 48px; }
-h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.3; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; text-wrap: balance; margin: 0; line-height: 1.3; }
 p { margin: 0; }
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Header */
-.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
-.brand h1 { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.01em; }
+.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; padding-bottom: 14px; border-bottom: 4px solid var(--accent); }
+.brand h1 { font-size: var(--step-3); font-weight: 400; letter-spacing: 0; }
+.brand h1 em { font-style: normal; color: var(--accent); }
 .brand p { color: var(--muted); font-size: var(--step--1); margin-top: 2px; }
 .brand .two { color: var(--reflex); }
-.brand .two + .two { color: var(--reason); }
+.brand .two + .two { color: var(--ink); font-weight: 600; }
 .tabs { display: flex; gap: 4px; background: var(--sunken); padding: 4px; border-radius: 999px; }
 .tabs button { border: 0; background: transparent; padding: 6px 14px; border-radius: 999px; cursor: pointer; color: var(--muted); font-weight: 500; }
-.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 
 /* Main grid */
 .grid { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 24px; margin-top: 20px; align-items: start; }
@@ -88,7 +80,8 @@ textarea { min-height: 70px; }
 .heat-row { display: flex; align-items: center; gap: 10px; }
 .heat input { flex: 1; accent-color: var(--reflex); }
 .heat output { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 5.5em; text-align: right; font-size: var(--step--1); }
-.btn { border: 0; background: var(--accent); color: var(--accent-ink); padding: 11px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+.btn { border: 0; background: var(--accent); color: var(--accent-ink); padding: 11px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+.btn:not(.ghost):not(:disabled):hover { filter: brightness(1.1); }
 .btn:disabled { opacity: .55; cursor: default; }
 .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
 .btn.small { padding: 5px 11px; font-size: var(--step--1); font-weight: 500; }
@@ -101,11 +94,11 @@ textarea { min-height: 70px; }
 .tag { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: var(--step--1); font-weight: 600; }
 .tag.example { background: var(--warn-soft); color: var(--warn); }
 .tag.saved { background: var(--reason-soft); color: var(--reason); }
-.summary { font-family: var(--font-display); font-size: var(--step-2); line-height: 1.45; }
+.summary { font-weight: 600; font-size: var(--step-2); line-height: 1.5; border-left: 6px solid var(--accent); padding-left: 14px; }
 .sec { display: grid; gap: 12px; }
 .sec > h3 { font-size: var(--step-1); display: flex; align-items: baseline; gap: 10px; }
 .sec > h3 small { font-family: var(--font-body); font-size: var(--step--1); color: var(--muted); font-weight: 400; }
-.sec.mirror { background: var(--surface); border: 2px solid var(--reflex); border-radius: var(--radius); padding: 18px; }
+.sec.mirror { background: var(--surface); border: 2px solid var(--accent); box-shadow: 6px 6px 0 var(--reflex-soft); border-radius: var(--radius); padding: 18px; }
 .sec.mirror > h3 { color: var(--reflex); }
 
 .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -131,14 +124,14 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
 .meter { display: flex; gap: 3px; }
 .meter span { height: 10px; flex: 1; max-width: 46px; border-radius: 3px; background: var(--sunken); }
 .meter.me span.on { background: var(--reflex); }
-.meter.them span.on { background: var(--accent); }
+.meter.them span.on { background: var(--ink); }
 .scarf .dom b { display: block; font-size: var(--step-0); }
 .scarf .dom span { color: var(--muted); }
 .kluge { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
 @media (max-width: 560px) { .kluge { grid-template-columns: minmax(0, 1fr); } }
 .kluge h4 { margin: 0 0 4px; font-size: var(--step--1); }
 .kluge .me h4 { color: var(--reflex); }
-.kluge .them h4 { color: var(--accent); }
+.kluge .them h4 { color: var(--ink); }
 
 .scarf.one { grid-template-columns: minmax(5.5em, auto) minmax(0, 1fr); }
 .kluge.one { grid-template-columns: minmax(0, 1fr); }
@@ -153,7 +146,7 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
 .verdict.now { background: var(--reason-soft); color: var(--reason); }
 .verdict.wait { background: var(--reflex-soft); color: var(--reflex); }
 .verdict.info { background: var(--warn-soft); color: var(--warn); }
-.monologue { font-family: var(--font-display); font-size: var(--step-1); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; line-height: 1.7; }
+.monologue { font-family: var(--font-quote); font-size: var(--step-1); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; line-height: 1.7; }
 .monologue::before { content: "“"; color: var(--accent); font-size: 1.6em; line-height: 0; vertical-align: -0.3em; margin-right: 2px; }
 .gap { border-left: 3px solid var(--accent); padding-left: 12px; }
 
@@ -187,7 +180,7 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
 
 /* Loading / pause */
 .state { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 20px; display: grid; gap: 14px; justify-items: center; text-align: center; }
-.breath { width: 120px; height: 120px; border-radius: 50%; background: var(--reason-soft); border: 2px solid var(--reason); display: grid; place-items: center; font-variant-numeric: tabular-nums; font-size: var(--step-2); font-family: var(--font-display); color: var(--reason); animation: breathe 10s ease-in-out infinite; }
+.breath { width: 120px; height: 120px; border-radius: 50%; background: var(--reflex-soft); border: 3px solid var(--accent); display: grid; place-items: center; font-variant-numeric: tabular-nums; font-size: var(--step-2); font-family: var(--font-display); color: var(--accent); animation: breathe 10s ease-in-out infinite; }
 @keyframes breathe { 0%, 100% { transform: scale(.82); } 40% { transform: scale(1.05); } 60% { transform: scale(1.05); } }
 @media (prefers-reduced-motion: reduce) { .breath { animation: none; } }
 .state p { max-width: 44ch; }
@@ -249,7 +242,7 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <h1>클루지 관계 코치</h1>
+      <h1><em>클루지</em> 관계 코치</h1>
       <p><span class="two">반사하는 옛 뇌</span>와 <span class="two">생각하는 새 뇌</span> 사이에서, 상대의 마음과 내 마음을 함께 봅니다</p>
     </div>
     <nav class="tabs" role="tablist" aria-label="화면">
