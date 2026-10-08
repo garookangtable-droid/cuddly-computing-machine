@@ -142,6 +142,7 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
 .halt { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 6px; }
 .halt h4 { margin: 0; font-size: var(--step--1); color: var(--reflex); }
 .halt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ego-admit { margin-top: 12px; }
 .verdict { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 600; }
 .verdict.now { background: var(--reason-soft); color: var(--reason); }
 .verdict.wait { background: var(--reflex-soft); color: var(--reflex); }
@@ -445,6 +446,11 @@ const BIASES = [
     antidote: "내 예측이 틀린다면 그 이유가 무엇일지 미리 적어본다(사전 부검)." }
 ];
 
+BIASES.push({ id: "ego_overload", name: "자의식 과잉", en: "Ego defense · 『역행자』",
+  desc: "내 자존심을 지키려고 불편한 사실을 부정하거나, 남 탓을 하거나, 그럴듯하게 합리화한다.",
+  origin: "무리 안의 체면은 생존 자원이었다. 그래서 뇌는 '내가 틀렸다'는 정보를 몸이 다칠 때처럼 위협으로 처리한다. 자청은 『역행자』에서 이것을 성장을 막는 첫 번째 벽으로 꼽았다.",
+  antidote: "'지금 내 반응은 사실을 보려는 건가, 내 자존심을 지키려는 건가?'를 묻고, 내가 틀렸을 가능성을 한 문장으로 인정해본다." });
+
 const HALT = { hungry: "배고픔", angry: "분노", lonely: "외로움", tired: "피로·수면 부족", sick: "몸이 아픔" };
 const VERDICT = { now: "지금 결정해도 괜찮아요", wait: "결정을 미루세요", info: "정보가 더 필요해요" };
 const BIAS_MAP = Object.fromEntries(BIASES.map(b => [b.id, b]));
@@ -461,6 +467,7 @@ const LENSES = [
   { name: "스토아 철학", who: "에픽테토스, 세네카", idea: "통제할 수 있는 것(내 판단, 내 반응)과 통제할 수 없는 것(남의 말, 이미 일어난 일)을 나눈다. 고통은 사건이 아니라 사건에 대한 내 판단에서 온다." },
   { name: "아리스토텔레스의 중용", who: "니코마코스 윤리학", idea: "화를 내는 것은 쉽다. 올바른 대상에게, 올바른 정도로, 올바른 때에, 올바른 방식으로 화내는 것이 어렵다." },
   { name: "칸트의 인간 존엄", who: "정언명령", idea: "사람을 결코 수단으로만 대하지 말고 목적으로 대하라. 상대를 '문제'가 아니라 이유가 있는 사람으로 본다." },
+  { name: "역행자의 자의식 해체", who: "자청, 『역행자』", idea: "자존심을 지키려는 반응(자의식 과잉)을 알아차리고 내려놓아야 현실을 있는 그대로 보고 배울 수 있다. 인간의 본능은 원시 환경에 맞춰진 유전자의 오작동일 때가 많으니, 본능을 거슬러(역행) 판단한다." },
   { name: "비폭력대화", who: "마셜 로젠버그", idea: "관찰, 느낌, 욕구, 부탁의 순서로 말한다. 평가 대신 관찰을, 요구 대신 부탁을." }
 ];
 
@@ -516,6 +523,9 @@ const EXAMPLE_RESULT = {
       why: "사장님이 베푼 배려는 사장님에게 생생하지만, B 입장에서는 3년간 쌓은 숙련과 기여가 더 생생합니다. 각자 자기 쪽 장부만 크게 보입니다.",
       reframe: "나도 잘해줬고, B도 3년간 기여했다. 둘 다 '받은 만큼 인정받지 못했다'고 느낄 수 있다." }
   ],
+  ego: { level: 2,
+    defense: "'직원에게 잘해주는 사장'이라는 내 이미지를 지키고 있습니다. B의 불만이 정당하다고 인정하면 내가 불공정한 사장이 되는 것 같아서, B를 '돈만 보는 사람'으로 낮춰 보고 있습니다.",
+    admit: "내가 정한 급여 기준에 3년차가 서운할 만한 빈틈이 있었을 수 있다." },
   myBrain: { scarf: { status: 2, certainty: 1, autonomy: 1, relatedness: 3, fairness: 2 },
     kluge: "무리 앞에서 나온 불만은 옛 뇌에게 '서열 도전'으로 읽힙니다. 게다가 믿었던 사람에게서 나온 말이라 관계성 위협이 겹쳐 배신감으로 크게 느껴집니다. '나가라'는 충동은 위협을 빨리 제거하려는 반사 반응입니다." },
   theirBrain: { scarf: { status: 3, certainty: 1, autonomy: 0, relatedness: 1, fairness: 3 },
@@ -592,6 +602,9 @@ const EXAMPLE_SOLO_RESULT = {
       why: "지금의 불안을 줄이는 결정이 다음 달 매출을 더 떨어뜨릴 수 있습니다. 광고를 끊으면 신규 손님이 줄고, 인력을 줄이면 서비스 질이 떨어질 수 있습니다.",
       reframe: "줄일 비용을 정하기 전에, 무엇이 매출을 만드는지부터 확인하자." }
   ],
+  ego: { level: 2,
+    defense: "'실패하면 안 되는 사장'이라는 자아상을 지키고 있습니다. 원인을 모르는 불확실한 상태를 견디기 어려워서, '망한다'나 '다 내 탓'처럼 극단적인 결론으로 빨리 정리하려 합니다.",
+    admit: "이번 달은 내 예상보다 안 됐고, 아직 원인을 모른다. 모른다는 건 부끄러운 일이 아니다." },
   alarm: { felt: 3, real: 1,
     why: "느끼는 위험은 '가게가 끝난다' 수준인데, 사실로 확인된 것은 한 달 15% 감소뿐입니다. 3개월 추세, 고정비 대비 여유 자금을 확인하기 전까지 실제 위험은 '주의' 단계로 보는 게 맞습니다." },
   body: { halt: ["tired"], note: "며칠째 수면이 부족하면 전전두엽(새 뇌)의 브레이크가 약해지고 편도체(옛 뇌)의 경보는 더 커집니다. 지금 불안의 상당 부분은 매출이 아니라 피로에서 오고 있을 수 있습니다." },
@@ -732,7 +745,8 @@ ${biasList}
 
 SCARF 영역(위협 강도 0=없음 ~ 3=강함): status 지위, certainty 확실성, autonomy 자율성, relatedness 관계성, fairness 공정성.
 body.halt 값: hungry, angry, lonely, tired, sick 중 해당하는 것만.
-철학 렌즈(lens.name은 이 중 가장 도움이 되는 하나): 스토아 철학, 아리스토텔레스의 중용, 칸트의 인간 존엄, 비폭력대화.
+『역행자』(자청)의 개념도 쓴다: '유전자 오작동'은 원시 환경에 맞춰진 본능이 현대에서 잘못 작동하는 것(클루지와 같은 뜻)이고, '자의식 과잉'은 자존심을 지키려고 불편한 사실을 부정, 합리화, 남 탓하는 반응이며, '자의식 해체'는 그 반응을 알아차리고 내가 틀렸거나 부족할 수 있음을 인정하는 것이다. kluge 설명에는 필요하면 '유전자 오작동'이라는 말을 써라. ego에는 이번 서술에서 자의식이 무엇을 지키려 하는지 정직하게 쓰고(근거 없으면 level 0), admit에는 자존심을 내려놓고 인정할 한 문장을 1인칭으로 써라. 자의식 과잉이 뚜렷하면 myErrors에 ego_overload도 넣어라.
+철학 렌즈(lens.name은 이 중 가장 도움이 되는 하나): 스토아 철학, 아리스토텔레스의 중용, 칸트의 인간 존엄, 역행자의 자의식 해체, 비폭력대화.
 
 [사용자 입력]
 무슨 일, 어떤 상태: ${inp.situation}
@@ -747,6 +761,7 @@ body.halt 값: hungry, angry, lonely, tired, sick 중 해당하는 것만.
   "facts": ["관찰 가능한 사실"],
   "interpretations": ["사용자의 해석, 예측, 평가"],
   "myErrors": [{"id": "목록의 id", "quote": "사용자 원문 그대로 인용", "why": "왜 오류일 수 있는지", "reframe": "다시 생각해본 문장"}],
+  "ego": {"level": 0, "defense": "내 자의식(자존심)이 지키려는 것과 그 때문에 생긴 왜곡", "admit": "자의식을 내려놓고 인정할 1인칭 문장"},
   "alarm": {"felt": 0, "real": 0, "why": "느끼는 위험과 실제 위험의 차이 설명"},
   "body": {"halt": [], "note": "몸 상태가 판단에 미치는 영향, 없으면 빈 문자열"},
   "scarf": {"status": 0, "certainty": 0, "autonomy": 0, "relatedness": 0, "fairness": 0},
@@ -779,7 +794,8 @@ function buildPrompt(inp) {
 ${biasList}
 
 SCARF 영역(위협 강도 0=없음 ~ 3=강함): status 지위, certainty 확실성, autonomy 자율성, relatedness 관계성, fairness 공정성.
-철학 렌즈(lens.name은 이 중 가장 도움이 되는 하나): 스토아 철학, 아리스토텔레스의 중용, 칸트의 인간 존엄, 비폭력대화.
+『역행자』(자청)의 개념도 쓴다: '유전자 오작동'은 원시 환경에 맞춰진 본능이 현대에서 잘못 작동하는 것(클루지와 같은 뜻)이고, '자의식 과잉'은 자존심을 지키려고 불편한 사실을 부정, 합리화, 남 탓하는 반응이며, '자의식 해체'는 그 반응을 알아차리고 내가 틀렸거나 부족할 수 있음을 인정하는 것이다. kluge 설명에는 필요하면 '유전자 오작동'이라는 말을 써라. ego에는 이번 서술에서 자의식이 무엇을 지키려 하는지 정직하게 쓰고(근거 없으면 level 0), admit에는 자존심을 내려놓고 인정할 한 문장을 1인칭으로 써라. 자의식 과잉이 뚜렷하면 myErrors에 ego_overload도 넣어라.
+철학 렌즈(lens.name은 이 중 가장 도움이 되는 하나): 스토아 철학, 아리스토텔레스의 중용, 칸트의 인간 존엄, 역행자의 자의식 해체, 비폭력대화.
 
 [사용자 입력]
 상대와의 관계: ${inp.rel}
@@ -795,6 +811,7 @@ SCARF 영역(위협 강도 0=없음 ~ 3=강함): status 지위, certainty 확실
   "facts": ["관찰 가능한 사실"],
   "interpretations": ["사용자의 해석이나 추측"],
   "myErrors": [{"id": "목록의 id", "quote": "사용자 원문 그대로 인용", "why": "왜 오류일 수 있는지", "reframe": "다시 생각해본 문장"}],
+  "ego": {"level": 0, "defense": "내 자의식(자존심)이 지키려는 것과 그 때문에 생긴 왜곡", "admit": "자의식을 내려놓고 인정할 1인칭 문장"},
   "myBrain": {"scarf": {"status": 0, "certainty": 0, "autonomy": 0, "relatedness": 0, "fairness": 0}, "kluge": "사용자의 옛 뇌가 왜 이렇게 반응하는지 진화적, 뇌과학적 설명"},
   "theirBrain": {"scarf": {"status": 0, "certainty": 0, "autonomy": 0, "relatedness": 0, "fairness": 0}, "kluge": "상대의 반응을 설명하는 진화적, 뇌과학적 설명", "monologue": "상대의 1인칭 속마음", "needs": ["상대가 원하는 것"], "theirErrors": [{"id": "목록의 id", "why": "상대가 빠졌을 수 있는 생각 오류"}]},
   "gap": "두 사람의 입장 차이 핵심",
@@ -830,6 +847,8 @@ function renderResult(r, inp, opts = {}) {
   root.append(banner);
   root.append(h("p", { class: "summary", text: str(r.summary) }));
   root.append(renderMirror(r));
+  const eg = renderEgo(r.ego);
+  if (eg) root.append(eg);
 
   if (solo) renderSoloBody(root, r);
   else renderRelBody(root, r);
@@ -859,6 +878,17 @@ function renderMirror(r) {
       e.reframe ? h("p", { class: "reframe" }, h("b", { text: "다시 보면 " }), str(e.reframe)) : null));
   });
   return mirror;
+}
+
+/* 『역행자』의 자의식 해체 */
+function renderEgo(e) {
+  if (!e || (!e.defense && !e.admit)) return null;
+  return h("section", { class: "sec" },
+    h("h3", {}, "자의식 체크", h("small", { text: "『역행자』 · 자의식 해체" })),
+    h("div", { class: "brains ego" },
+      h("div", { class: "alarm" }, h("div", { class: "dom" }, h("b", { text: "자의식 과잉" }), h("span", { text: "자존심이 판단에 끼어든 정도" })), meter(lvl(e.level), "me")),
+      e.defense ? h("p", { class: "alarm-why", text: str(e.defense) }) : null,
+      e.admit ? h("p", { class: "reframe ego-admit" }, h("b", { text: "내려놓고 인정하기 " }), str(e.admit)) : null));
 }
 
 function renderPhilosophy(ph) {
@@ -900,7 +930,7 @@ function renderRelBody(root, r) {
     h("h3", {}, "두 개의 뇌가 느끼는 위협", h("small", { text: "SCARF 모델 · 0~3" })),
     h("div", { class: "brains" }, scarf,
       h("div", { class: "kluge" },
-        h("div", { class: "me" }, h("h4", { text: "내 옛 뇌가 반응하는 이유" }), h("p", { text: str(my.kluge) })),
+        h("div", { class: "me" }, h("h4", { text: "내 옛 뇌가 반응하는 이유 · 유전자 오작동" }), h("p", { text: str(my.kluge) })),
         h("div", { class: "them" }, h("h4", { text: "상대의 옛 뇌가 반응하는 이유" }), h("p", { text: str(th.kluge) }))))));
 
   const theirSec = h("section", { class: "sec" }, h("h3", {}, "상대의 자리에서", h("small", { text: "가장 그럴듯한 하나의 가능성" })));
@@ -940,7 +970,7 @@ function renderSoloBody(root, r) {
   const scarf = h("div", { class: "scarf one" }, h("span", {}), h("span", { class: "hd", text: "위협 강도" }));
   SCARF.forEach(s => scarf.append(h("div", { class: "dom" }, h("b", { text: s.name }), h("span", { text: s.desc })), meter(lvl(sc[s.key]), "me")));
   root.append(h("section", { class: "sec" },
-    h("h3", {}, "내 옛 뇌가 지금 하는 일", h("small", { text: "SCARF 모델 · 0~3" })),
+    h("h3", {}, "내 옛 뇌가 지금 하는 일", h("small", { text: "유전자 오작동 · SCARF 0~3" })),
     h("div", { class: "brains" }, scarf,
       h("div", { class: "kluge one" }, h("div", { class: "me" }, h("h4", { text: "왜 이렇게 느껴질까" }), h("p", { text: str(r.kluge) }))))));
 
@@ -1322,6 +1352,14 @@ function renderLibrary() {
       h("div", { class: "twobrain" },
         h("div", { class: "old" }, h("h3", { text: "옛 뇌 (반사 시스템)" }), h("p", { text: "빠르고 자동적이며 감정적입니다. 위협, 서열, 공정성, 소속을 순식간에 감지합니다. 편도체가 중심이며, 오경보가 많지만 놓치는 법은 적습니다." })),
         h("div", { class: "new" }, h("h3", { text: "새 뇌 (숙고 시스템)" }), h("p", { text: "느리고 의식적이며 에너지가 많이 듭니다. 전전두엽이 중심입니다. 피곤하거나 화가 나면 가장 먼저 꺼집니다. 그래서 중요한 대화는 감정이 가라앉은 뒤에 하는 게 좋습니다." })))),
+    h("section", {},
+      h("h2", { text: "역행자: 본능을 거슬러 판단하기" }),
+      h("p", { class: "lead", text: "자청의 『역행자』는 클루지와 같은 문제를 더 실용적인 말로 풀어냅니다. 분석 결과의 '자의식 체크'와 '유전자 오작동' 설명이 이 개념에서 왔어요." }),
+      h("div", { class: "cards" },
+        h("div", { class: "card" }, h("h3", { text: "자의식 과잉" }), h("p", { text: "내 자존심을 지키려고 불편한 사실을 부정하거나, 합리화하거나, 남 탓을 하는 상태. 상처받지 않는 대신 배우지도 못합니다." })),
+        h("div", { class: "card" }, h("h3", { text: "자의식 해체" }), h("p", { text: "'내가 틀렸을 수 있다', '내가 부족할 수 있다'를 받아들이는 것. 자존심이 다치는 느낌을 지나야 현실이 보이고, 그래야 다음 판단이 나아집니다." })),
+        h("div", { class: "card" }, h("h3", { text: "유전자 오작동" }), h("p", { text: "원시 환경에 맞춰진 본능이 현대 사회에서 잘못 작동하는 것. 남 눈치 보기, 손실에 대한 과한 공포, 당장의 편안함 추구가 대표적입니다. 클루지와 같은 이야기예요." })),
+        h("div", { class: "card" }, h("h3", { text: "순리자와 역행자" }), h("p", { text: "본능이 시키는 대로 사는 사람이 순리자, 본능의 오작동을 알아차리고 거슬러 판단하는 사람이 역행자입니다. 이 앱의 모든 분석은 역행하는 연습이에요." })))),
     h("section", {},
       h("h2", { text: "SCARF: 사회적 위협의 다섯 가지" }),
       h("p", { class: "lead", text: "신경과학자 데이비드 록이 정리한 모델입니다. 뇌는 아래 다섯 가지가 위협받을 때 몸이 다칠 때와 비슷한 경보를 울립니다." }),
