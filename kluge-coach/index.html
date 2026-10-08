@@ -192,6 +192,14 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
 .hist { display: grid; gap: 8px; }
 .hist-item { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; cursor: pointer; display: grid; gap: 3px; }
 .hist-item:hover { border-color: var(--accent); }
+.hist-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.hist-row .hist-item { min-width: 0; }
+.del { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+.del-btn { color: var(--muted); }
+.del-btn:hover { color: var(--reflex); border-color: var(--reflex); }
+.btn.danger { background: var(--reflex); color: var(--accent-ink); }
+.banner-del { margin-left: auto; }
+@media (max-width: 560px) { .hist-row { grid-template-columns: minmax(0, 1fr); } .hist-row .del { justify-content: flex-start; } }
 .hist-item .meta { font-size: var(--step--1); color: var(--muted); font-variant-numeric: tabular-nums; }
 .hist-item .sum { font-weight: 500; }
 .empty { color: var(--muted); padding: 20px 0; }
@@ -610,9 +618,10 @@ function listOrNone(items) {
 function renderResult(r, inp, opts = {}) {
   const root = $("#result");
   root.replaceChildren();
+  currentRecordId = opts.recordId || null;
   const banner = h("div", { class: "banner" });
   if (opts.example) banner.append(h("span", { class: "tag example", text: "예시 분석" }), h("span", { text: `'${EXAMPLE_INPUT.label}' 사례로 만든 예시예요. 왼쪽에 내 상황을 적고 분석해보세요.` }));
-  else if (opts.recordId) banner.append(h("span", { class: "tag saved", text: opts.when ? fmtDate(opts.when) : "기록에 저장됨" }), h("span", { text: `${str(inp.rel)} · 감정 온도 ${inp.heat}/5` }));
+  else if (opts.recordId) banner.append(h("span", { class: "tag saved", text: opts.when ? fmtDate(opts.when) : "기록에 저장됨" }), h("span", { text: `${str(inp.rel)} · 감정 온도 ${inp.heat}/5` }), h("span", { class: "banner-del" }, deleteControl(opts.recordId)));
   else banner.append(h("span", { class: "note", text: "저장하지 못했어요. 결과는 이 화면에만 남아 있어요." }));
   root.append(banner);
   root.append(h("p", { class: "summary", text: str(r.summary) }));
@@ -752,6 +761,7 @@ function renderOutcome(opts) {
 let sampleFn = null;
 let ctl = null;
 let runId = 0; // 다른 화면으로 넘어가면 진행 중이던 분석 결과가 화면을 덮지 않도록
+let currentRecordId = null; // 지금 결과 화면에 보이는 기록
 
 function readForm() {
   return {
@@ -795,6 +805,7 @@ function showError(msg) {
 
 async function analyze(inp) {
   if (!sampleFn) return;
+  currentRecordId = null;
   ctl?.abort();
   ctl = new AbortController();
   const signal = ctl.signal;
@@ -856,7 +867,7 @@ function renderHistory(items) {
       renderResult(r, inp, { recordId: it.id, when: it.createdAt, outcome: it.outcome, chat: it.chat });
       $("#result").scrollIntoView({ behavior: "smooth", block: "start" });
     });
-    list.append(btn);
+    list.append(h("div", { class: "hist-row" }, btn, deleteControl(it.id)));
   });
   // 생각 습관 패턴
   const counts = {};
@@ -868,6 +879,38 @@ function renderHistory(items) {
     habits.append(h("span", { class: "note", text: "내가 자주 빠지는 생각 습관" }));
     top.forEach(([id, n]) => habits.append(h("span", { class: "habit", text: `${(BIAS_MAP[id] || { name: id }).name} ${n}회` })));
   }
+}
+
+/* 삭제 버튼: 한 번 더 확인한 뒤 지움 */
+function deleteControl(id, onDeleted) {
+  const box = h("div", { class: "del" });
+  const idle = () => {
+    const b = h("button", { class: "btn ghost small del-btn", type: "button", text: "삭제", "aria-label": "이 기록 삭제" });
+    b.addEventListener("click", ask);
+    box.replaceChildren(b);
+  };
+  const ask = () => {
+    const yes = h("button", { class: "btn small danger", type: "button", text: "삭제" });
+    const no = h("button", { class: "btn ghost small", type: "button", text: "취소" });
+    no.addEventListener("click", idle);
+    yes.addEventListener("click", async () => {
+      yes.disabled = no.disabled = true;
+      try {
+        await store.remove(id);
+        if (currentRecordId === id) {
+          currentRecordId = null;
+          renderResult(EXAMPLE_RESULT, EXAMPLE_INPUT, { example: true });
+        }
+        onDeleted?.();
+      } catch {
+        box.replaceChildren(h("span", { class: "note", text: "삭제하지 못했어요. 다시 눌러주세요." }));
+        setTimeout(idle, 2500);
+      }
+    });
+    box.replaceChildren(h("span", { class: "note", text: "되돌릴 수 없어요." }), yes, no);
+  };
+  idle();
+  return box;
 }
 
 /* ---------- 지식 카드 ---------- */
