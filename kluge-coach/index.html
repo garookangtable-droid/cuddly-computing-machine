@@ -1328,7 +1328,7 @@ function deleteControl(id, onDeleted) {
         await store.remove(id);
         if (currentRecordId === id) {
           currentRecordId = null;
-          showExample(currentMode());
+          showEmpty();
         }
         onDeleted?.();
       } catch {
@@ -1411,7 +1411,7 @@ function setMode(m) {
   $("#rel-field").hidden = m === "solo";
   $("#presets").replaceChildren(...presetsFor(m).map(p => {
     const c = h("button", { class: "chip", type: "button", text: p.label });
-    c.addEventListener("click", () => fillForm(p));
+    c.addEventListener("click", () => usePreset(p));
     return c;
   }));
 }
@@ -1421,14 +1421,40 @@ function showExample(m) {
   else renderResult(EXAMPLE_RESULT, EXAMPLE_INPUT, { example: true });
 }
 
-/* 모드를 바꿀 때: 사용자가 쓴 글은 지키고, 예시 상태일 때만 예시를 바꿔 보여줌 */
+/* 처음 화면: 빈 결과 자리. 분석이나 예시를 고르면 바뀜 */
+function showEmpty() {
+  currentRecordId = null;
+  showingExample = true;
+  const solo = currentMode() === "solo";
+  const try1 = h("button", { class: "btn ghost small", type: "button", text: "예시 분석 보기" });
+  try1.addEventListener("click", () => usePreset(solo ? EXAMPLE_SOLO_INPUT : EXAMPLE_INPUT));
+  $("#result").replaceChildren(h("div", { class: "state empty-state" },
+    h("h3", { text: solo ? "지금 내 상태를 적어보세요" : "있었던 일을 적어보세요" }),
+    h("p", { text: "왼쪽 칸을 채우고 분석하기를 누르면 여기에 결과가 나와요. 어떻게 쓰는지 궁금하면 예시를 눌러보세요." }),
+    h("div", { class: "row" }, try1)));
+}
+
+/* 예시 버튼: 폼을 채우고, 미리 만든 예시 분석이 있으면 함께 보여줌 */
+function usePreset(p) {
+  fillForm(p);
+  if (p === EXAMPLE_INPUT) showExample("rel");
+  else if (p === EXAMPLE_SOLO_INPUT) showExample("solo");
+  else if (showingExample) showEmpty();
+}
+
+function clearForm() {
+  for (const id of ["situation", "feeling", "guess", "want"]) $("#" + id).value = "";
+  $("#heat").value = 3;
+  updateHeat();
+}
+
+/* 모드를 바꿀 때: 사용자가 쓴 글은 지키고, 예시로 채운 글만 비움 */
 function onModeChange() {
   const m = currentMode();
   setMode(m);
   const s = $("#situation").value.trim();
-  const pristine = !s || [...PRESETS, ...PRESETS_SOLO].some(p => p.situation === s);
-  if (pristine) fillForm(m === "solo" ? EXAMPLE_SOLO_INPUT : EXAMPLE_INPUT);
-  if (showingExample) showExample(m);
+  if (s && [...PRESETS, ...PRESETS_SOLO].some(p => p.situation === s)) clearForm();
+  if (showingExample) showEmpty();
 }
 
 function fillForm(p) {
@@ -1459,8 +1485,9 @@ $("#form").addEventListener("submit", ev => {
   analyze(inp);
 });
 
-fillForm(EXAMPLE_INPUT);
-showExample("rel");
+setMode("rel");
+clearForm();
+showEmpty();
 renderLibrary();
 store.listeners.push(renderHistory);
 renderHistory([]);
