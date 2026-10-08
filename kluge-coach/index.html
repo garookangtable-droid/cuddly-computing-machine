@@ -203,6 +203,25 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
 .hist-head { display: grid; gap: 10px; margin-bottom: 14px; }
 .habits { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .habit { background: var(--reflex-soft); color: var(--reflex); border-radius: 999px; padding: 3px 11px; font-size: var(--step--1); font-weight: 600; font-variant-numeric: tabular-nums; }
+.habit-btn { border: 1px solid transparent; cursor: pointer; }
+.habit-btn:hover { border-color: var(--accent); }
+.habit-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.habit-detail { background: var(--surface); border: 2px solid var(--accent); border-radius: var(--radius); padding: 18px; display: grid; gap: 12px; }
+.habit-detail .hd-row { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.habit-detail h3 { font-size: var(--step-2); color: var(--accent); }
+.habit-detail .en { color: var(--muted); font-size: var(--step--1); font-variant-numeric: tabular-nums; }
+.habit-detail .k { color: var(--muted); font-size: var(--step--1); }
+.habit-detail .k b { color: var(--ink); }
+.hd-facts { display: grid; gap: 4px; }
+.hd-sub { margin: 6px 0 0; font-size: var(--step-0); }
+.insight { background: var(--sunken); border-radius: 8px; padding: 14px 16px; display: grid; gap: 10px; }
+.insight .hd-sub { margin: 0; color: var(--accent); }
+.insight .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.reminder { font-family: var(--font-display); font-size: var(--step-2); line-height: 1.4; color: var(--ink); }
+.hd-list { display: grid; gap: 10px; }
+.hd-item { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 6px; }
+.hd-item .meta { font-size: var(--step--1); color: var(--muted); font-variant-numeric: tabular-nums; }
+.hd-item .why { color: var(--muted); }
 .hist { display: grid; gap: 8px; }
 .hist-item { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; cursor: pointer; display: grid; gap: 3px; }
 .hist-item:hover { border-color: var(--accent); }
@@ -305,6 +324,7 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
     <div class="hist-head" style="margin-top:20px">
       <h2 style="font-size:var(--step-2)">지난 상황들</h2>
       <div class="habits" id="habits"></div>
+      <section class="habit-detail" id="habit-detail" aria-live="polite" hidden></section>
     </div>
     <div class="hist" id="hist"></div>
   </main>
@@ -645,6 +665,8 @@ const store = {
       const uid = user ? await user.id() : null;
       if (db && uid) {
         this.col = db.collection("data/users/" + uid);
+        // 생각 습관 정리는 기록 목록과 섞이지 않게 하위 컬렉션에 둠
+        this.ins = db.doc("data/users/" + uid + "/meta").collection("insights");
         this.mode = "db";
         this.col.orderBy("createdAt", "desc").limit(300).onSnapshot(
           snap => { this.items = snap.docs.map(d => ({ id: d.id, ...d.data() })); this.emit(); },
@@ -674,6 +696,16 @@ const store = {
   async remove(id) {
     if (this.mode === "db") { await this.col.doc(id).delete(); }
     else { this.items = this.items.filter(i => i.id !== id); this.saveLocal(); this.emit(); }
+  },
+  localInsights() { try { return JSON.parse(localStorage.getItem("kluge-insights") || "{}"); } catch { return {}; } },
+  async getInsight(biasId) {
+    if (this.mode === "db") { const s = await this.ins.doc(biasId).get(); return s.exists ? s.data() : null; }
+    return this.localInsights()[biasId] || null;
+  },
+  async setInsight(biasId, data) {
+    if (this.mode === "db") { await this.ins.doc(biasId).set(data); return; }
+    const all = this.localInsights(); all[biasId] = data;
+    try { localStorage.setItem("kluge-insights", JSON.stringify(all)); } catch {}
   }
 };
 
@@ -1104,13 +1136,148 @@ function renderHistory(items) {
   // 생각 습관 패턴
   const counts = {};
   items.forEach(it => arr(it.result && it.result.myErrors).forEach(e => { if (e && e.id) counts[e.id] = (counts[e.id] || 0) + 1; }));
-  const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const habits = $("#habits");
   habits.replaceChildren();
   if (top.length) {
-    habits.append(h("span", { class: "note", text: "내가 자주 빠지는 생각 습관" }));
-    top.forEach(([id, n]) => habits.append(h("span", { class: "habit", text: `${(BIAS_MAP[id] || { name: id }).name} ${n}회` })));
+    habits.append(h("span", { class: "note", text: "내가 자주 빠지는 생각 습관 · 눌러서 내 사례 보기" }));
+    top.forEach(([id, n]) => {
+      const b = h("button", { class: "habit habit-btn", type: "button", "aria-pressed": String(selectedHabit === id), text: `${(BIAS_MAP[id] || { name: id }).name} ${n}회` });
+      b.addEventListener("click", () => {
+        selectedHabit = selectedHabit === id ? null : id;
+        renderHistory(store.items);
+        if (selectedHabit) $("#habit-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      habits.append(b);
+    });
   }
+  if (selectedHabit && !counts[selectedHabit]) selectedHabit = null;
+  if (!habitBusy) renderHabitDetail(selectedHabit, items);
+}
+
+/* ---------- 생각 습관 상세: 내 사례 모음 + Claude 정리 ---------- */
+let selectedHabit = null;
+let habitBusy = false;
+
+function habitExamples(biasId, items) {
+  const out = [];
+  items.forEach(it => arr(it.result && it.result.myErrors).forEach(e => {
+    if (e && e.id === biasId) out.push({ rec: it, quote: str(e.quote), why: str(e.why), reframe: str(e.reframe) });
+  }));
+  return out;
+}
+
+function openRecord(it) {
+  runId++; ctl?.abort();
+  setView("new");
+  fillForm(it.input || {});
+  renderResult(it.result || {}, it.input || {}, { recordId: it.id, when: it.createdAt, outcome: it.outcome, chat: it.chat });
+  $("#result").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderHabitDetail(biasId, items) {
+  const box = $("#habit-detail");
+  box.replaceChildren();
+  box.hidden = !biasId;
+  if (!biasId) return;
+  const b = BIAS_MAP[biasId] || { name: biasId, en: "", desc: "", origin: "", antidote: "" };
+  const ex = habitExamples(biasId, items);
+  const close = h("button", { class: "btn ghost small", type: "button", text: "닫기" });
+  close.addEventListener("click", () => { selectedHabit = null; renderHistory(store.items); });
+
+  const insightBox = h("div", { class: "insight" });
+  box.append(
+    h("div", { class: "hd-row" },
+      h("div", {}, h("h3", { text: b.name }), h("span", { class: "en", text: `${b.en} · 지금까지 ${ex.length}번` })),
+      close),
+    h("p", { text: b.desc }),
+    h("div", { class: "hd-facts" },
+      h("p", { class: "k" }, h("b", { text: "왜 생겼나 " }), b.origin),
+      h("p", { class: "k" }, h("b", { text: "해독제 " }), b.antidote)),
+    insightBox,
+    h("h4", { class: "hd-sub", text: "내가 이 습관에 빠졌던 순간들" }),
+    h("div", { class: "hd-list" }, ex.map(x => {
+      const open = h("button", { class: "btn ghost small", type: "button", text: "이 기록 열기" });
+      open.addEventListener("click", () => openRecord(x.rec));
+      const inp = x.rec.input || {};
+      return h("div", { class: "hd-item" },
+        h("span", { class: "meta", text: `${fmtDate(x.rec.createdAt)} · ${inp.mode === "solo" ? "나 혼자 점검" : str(inp.rel)}` }),
+        x.quote ? h("p", { class: "quote", text: x.quote }) : null,
+        x.why ? h("p", { class: "why", text: x.why }) : null,
+        x.reframe ? h("p", { class: "reframe" }, h("b", { text: "다시 보면 " }), x.reframe) : null,
+        h("div", { class: "script-foot" }, open));
+    })));
+  renderInsight(insightBox, biasId, b, ex);
+}
+
+async function renderInsight(box, biasId, b, ex) {
+  let saved = null;
+  try { saved = await store.getInsight(biasId); } catch {}
+  if (selectedHabit !== biasId) return;
+  const draw = (data, stale) => {
+    box.replaceChildren(h("h4", { class: "hd-sub", text: "Claude가 정리한 나의 패턴" }));
+    if (data) {
+      const d = data.data || {};
+      box.append(
+        d.reminder ? h("p", { class: "reminder", text: str(d.reminder) }) : null,
+        d.pattern ? h("p", { text: str(d.pattern) }) : null,
+        arr(d.triggers).length ? h("div", {}, h("p", { class: "note", text: "이럴 때 잘 빠져요" }), listOrNone(d.triggers)) : null,
+        d.cost ? h("p", {}, h("b", { text: "이 습관이 내게 남긴 비용. " }), str(d.cost)) : null,
+        d.question ? h("p", { class: "reframe" }, h("b", { text: "그 순간 나에게 물을 질문 " }), str(d.question)) : null,
+        d.practice ? h("p", {}, h("b", { text: "앞으로 2주 연습. " }), str(d.practice)) : null,
+        h("p", { class: "note", text: `${fmtDate(data.createdAt)}에 사례 ${data.count}개로 정리했어요.${stale ? " 그 뒤로 사례가 바뀌었어요." : ""}` }));
+    } else {
+      box.append(h("p", { class: "note", text: "내 사례들을 모아서 언제 이 습관이 나오는지, 그 순간 나에게 무엇을 물어야 하는지 정리해 드려요." }));
+    }
+    if (!sampleFn) return;
+    const go = h("button", { class: data ? "btn ghost small" : "btn small", type: "button", text: data ? "다시 정리하기" : "내 패턴 정리하기" });
+    const msg = h("span", { class: "note" });
+    go.addEventListener("click", () => summarize(go, msg));
+    box.append(h("div", { class: "row" }, go, msg));
+  };
+  const summarize = async (btn, msg) => {
+    habitBusy = true;
+    btn.disabled = true;
+    msg.textContent = "정리하는 중… 보통 20초쯤 걸려요";
+    try {
+      const d = await sampleFn.json(buildHabitPrompt(b, ex), { cache: false });
+      if (!d || typeof d !== "object") throw { code: "invalid_json" };
+      const rec = { biasId, count: ex.length, createdAt: Date.now(), data: d };
+      try { await store.setInsight(biasId, rec); } catch {}
+      habitBusy = false;
+      if (selectedHabit === biasId) draw(rec, false);
+    } catch (e) {
+      habitBusy = false;
+      btn.disabled = false;
+      msg.textContent = errCopy(e);
+    }
+  };
+  draw(saved, saved && saved.count !== ex.length);
+}
+
+function buildHabitPrompt(b, ex) {
+  const cases = ex.slice(0, 15).map((x, i) => {
+    const inp = x.rec.input || {};
+    return `${i + 1}. [${inp.mode === "solo" ? "혼자 점검" : "관계: " + str(inp.rel)}] 상황: ${str(inp.situation).slice(0, 220)}
+   내가 쓴 말: "${x.quote}"
+   당시 분석: ${x.why}`;
+  }).join("\n");
+  return `너는 클루지(진화적으로 덧대어진 뇌), 인지행동치료, 행동경제학에 밝은 코치다. 사용자는 사업을 하는 사장이고, 자신이 반복해서 빠지는 생각 습관을 기억하고 고치고 싶어 한다.
+아래는 사용자가 '${b.name}'(${b.desc})에 빠졌던 실제 사례들이다.
+
+${cases}
+
+원칙: 아첨하지 말고 따뜻하지만 정확하게. 반드시 사례 속 실제 표현과 상황을 근거로 공통점을 찾아라. 사례가 적으면 단정하지 말고 '지금까지는'이라고 말하라. 쉬운 한국어, 짧은 문장. 마크다운 기호 금지.
+
+아래 형태의 JSON 하나만 출력하라.
+{
+  "reminder": "다음에 떠올릴 한 문장 경고. 스스로에게 하는 말투로, 25자 안팎",
+  "pattern": "나는 주로 어떤 상황에서, 어떤 식으로 이 습관에 빠지는지 2~3문장",
+  "triggers": ["이 습관이 켜지는 신호나 상황 2~4개"],
+  "cost": "이 습관 때문에 내가 치렀거나 치를 수 있는 비용 1~2문장",
+  "question": "그 순간 나에게 던질 질문 하나",
+  "practice": "앞으로 2주 동안 해볼 작고 구체적인 연습 하나"
+}`;
 }
 
 /* 삭제 버튼: 한 번 더 확인한 뒤 지움 */
