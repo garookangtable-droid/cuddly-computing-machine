@@ -147,7 +147,7 @@ tbody tr.sel { background: var(--accent-soft); }
 .adj input { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); text-align: right; }
 
 /* Dialog & settings */
-dialog { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(520px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); }
+dialog { max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(520px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); }
 dialog::backdrop { background: rgba(0,0,0,.45); }
 dialog form { padding: 18px; display: grid; gap: 12px; }
 dialog h2 { font-size: 18px; }
@@ -199,7 +199,7 @@ dialog h2 { font-size: 18px; }
 <div id="toast" class="toast" role="status" hidden></div>
 
 <dialog id="empDlg">
-  <form id="empForm" method="dialog">
+  <form id="empForm" method="dialog" novalidate>
     <h2 id="empDlgTitle">직원 추가</h2>
     <div class="seg" role="radiogroup" aria-label="구분">
       <label><input type="radio" name="type" value="part" checked>알바 (시급)</label>
@@ -210,11 +210,11 @@ dialog h2 { font-size: 18px; }
       <label class="field"><span>매장</span><select name="store"></select></label>
     </div>
     <div class="grid2" data-for="part">
-      <label class="field"><span>시급 (원)</span><input name="hourly" type="number" min="0" step="10" inputmode="numeric"></label>
+      <label class="field"><span>시급 (원)</span><input name="hourly" type="number" min="0" step="any" inputmode="numeric"></label>
     </div>
     <div class="grid2" data-for="full">
-      <label class="field"><span>월 기본급 (원)</span><input name="monthly" type="number" min="0" step="1000" inputmode="numeric"></label>
-      <label class="field"><span>수습 지급률 (%)</span><input name="probRate" type="number" min="0" max="100" step="1" value="90"></label>
+      <label class="field"><span>월 기본급 (원)</span><input name="monthly" type="number" min="0" step="any" inputmode="numeric"></label>
+      <label class="field"><span>수습 지급률 (%)</span><input name="probRate" type="number" min="0" max="100" step="any" value="90"></label>
     </div>
     <div class="grid2">
       <label class="field"><span>입사일</span><input name="hire" type="date"></label>
@@ -764,6 +764,7 @@ form.addEventListener('submit', ev => {
   if (!form.name.value.trim()) return fail('이름을 입력하세요.');
   if (t === 'part' && !(+form.hourly.value > 0)) return fail('시급을 입력하세요.');
   if (t === 'full' && !(+form.monthly.value > 0)) return fail('월 기본급을 입력하세요.');
+  if (t === 'full' && form.probMonths.value !== '0' && !(+form.probRate.value > 0 && +form.probRate.value <= 100)) return fail('수습 지급률은 1~100% 사이로 입력하세요.');
   if (form.hire.value && form.leave.value && form.leave.value < form.hire.value) return fail('퇴사일이 입사일보다 빠릅니다.');
   if (t === 'full' && form.probMonths.value !== '0') {
     if (!form.probEnd.value) return fail('수습 종료일을 입력하세요. 입사일을 넣고 개월 수를 고르면 자동으로 채워집니다.');
