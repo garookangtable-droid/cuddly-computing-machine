@@ -122,6 +122,11 @@ tbody tr.sel { background: var(--accent-soft); }
 .cal td.out { background: repeating-linear-gradient(135deg, transparent 0 6px, var(--sunken) 6px 8px); }
 .cal td.out input { visibility: hidden; }
 .cal td.sun .d span:first-child { color: var(--warn); }
+.cal td.hol { background: var(--warn-soft); }
+.cal .d .hn { color: var(--warn); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
+.hol-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 16px; margin: 10px 0; }
+.hol-list label { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.hol-list .off { text-decoration: line-through; color: var(--muted); }
 .juhu-ok { color: var(--accent); font-weight: 700; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
 .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; border: 1px solid var(--line); }
@@ -243,6 +248,59 @@ const hrs = n => r1(n).toLocaleString('ko-KR') + '시간';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+// ---------- 공휴일 (우주항공청 월력요항 기준, 대체·임시공휴일 포함) ----------
+const KR_HOLIDAYS = {
+  '2025-01-01': '신정', '2025-01-27': '임시공휴일', '2025-01-28': '설날 연휴', '2025-01-29': '설날', '2025-01-30': '설날 연휴',
+  '2025-03-01': '삼일절', '2025-03-03': '대체공휴일(삼일절)', '2025-05-05': '어린이날·부처님오신날', '2025-05-06': '대체공휴일',
+  '2025-06-03': '대통령선거', '2025-06-06': '현충일', '2025-08-15': '광복절', '2025-10-03': '개천절',
+  '2025-10-05': '추석 연휴', '2025-10-06': '추석', '2025-10-07': '추석 연휴', '2025-10-08': '대체공휴일(추석)', '2025-10-09': '한글날', '2025-12-25': '성탄절',
+  '2026-01-01': '신정', '2026-02-16': '설날 연휴', '2026-02-17': '설날', '2026-02-18': '설날 연휴',
+  '2026-03-01': '삼일절', '2026-03-02': '대체공휴일(삼일절)', '2026-05-01': '노동절', '2026-05-05': '어린이날',
+  '2026-05-24': '부처님오신날', '2026-05-25': '대체공휴일(부처님오신날)', '2026-06-03': '지방선거', '2026-06-06': '현충일',
+  '2026-07-17': '제헌절', '2026-08-15': '광복절', '2026-08-17': '대체공휴일(광복절)',
+  '2026-09-24': '추석 연휴', '2026-09-25': '추석', '2026-09-26': '추석 연휴',
+  '2026-10-03': '개천절', '2026-10-05': '대체공휴일(개천절)', '2026-10-09': '한글날', '2026-12-25': '성탄절',
+  '2027-01-01': '신정', '2027-02-06': '설날 연휴', '2027-02-07': '설날', '2027-02-08': '설날 연휴', '2027-02-09': '대체공휴일(설날)',
+  '2027-03-01': '삼일절', '2027-05-01': '노동절', '2027-05-03': '대체공휴일(노동절)', '2027-05-05': '어린이날', '2027-05-13': '부처님오신날',
+  '2027-06-06': '현충일', '2027-07-17': '제헌절', '2027-07-19': '대체공휴일(제헌절)', '2027-08-15': '광복절', '2027-08-16': '대체공휴일(광복절)',
+  '2027-09-14': '추석 연휴', '2027-09-15': '추석', '2027-09-16': '추석 연휴',
+  '2027-10-03': '개천절', '2027-10-04': '대체공휴일(개천절)', '2027-10-09': '한글날', '2027-10-11': '대체공휴일(한글날)',
+  '2027-12-25': '성탄절', '2027-12-27': '대체공휴일(성탄절)'
+};
+function holidayName(k) {
+  const H = state.holidays || {};
+  if (H.removed && H.removed[k]) return '';
+  return (H.added && H.added[k]) || KR_HOLIDAYS[k] || '';
+}
+// 알바 1.5배 대상: 월~금에 있는 공휴일 (주말 공휴일은 제외)
+const isPremiumDay = k => { const d = dowOf(k); return d !== 0 && d !== 6 && !!holidayName(k); };
+function holidaysOfYear(y) {
+  const H = state.holidays || {}, keys = new Set([...Object.keys(KR_HOLIDAYS), ...Object.keys(H.added || {})]);
+  return [...keys].filter(k => k.startsWith(y + '-')).sort()
+    .map(k => ({ k, name: (H.added && H.added[k]) || KR_HOLIDAYS[k], off: !!(H.removed && H.removed[k]), custom: !!(H.added && H.added[k]) && !KR_HOLIDAYS[k] }));
+}
+// 캘린더 앱에서 내보낸 .ics 파일의 종일 일정을 공휴일로 읽음
+function parseIcs(txt) {
+  const out = {}, lines = txt.replace(/\r?\n[ \t]/g, '').split(/\r?\n/);
+  let ev = null;
+  for (const l of lines) {
+    if (l === 'BEGIN:VEVENT') ev = {};
+    else if (l === 'END:VEVENT' && ev) {
+      if (ev.start) {
+        let k = ev.start; const end = ev.end && ev.end > ev.start ? ev.end : addDays(ev.start, 1);
+        for (let i = 0; k < end && i < 10; i++, k = addDays(k, 1)) out[k] = ev.name || '공휴일';
+      }
+      ev = null;
+    } else if (ev) {
+      const m = l.match(/^(DTSTART|DTEND|SUMMARY)[^:]*:(.*)$/);
+      if (!m) continue;
+      if (m[1] === 'SUMMARY') ev.name = m[2].replace(/\\,/g, ',').replace(/\\n/g, ' ').trim();
+      else { const d = m[2].match(/^(\d{4})(\d{2})(\d{2})/); if (d) ev[m[1] === 'DTSTART' ? 'start' : 'end'] = `${d[1]}-${d[2]}-${d[3]}`; }
+    }
+  }
+  return out;
+}
+
 // ---------- 저장 ----------
 function fresh() {
   return {
@@ -251,7 +309,8 @@ function fresh() {
     hours: {},   // hours[직원id][날짜] = 알바: 근무시간, 정직원: 추가근무시간
     excl: {},    // excl[직원id][주 마지막 날짜] = true → 그 주 주휴 제외
     adj: {},     // adj[직원id]['YYYY-MM'] = 기타 수당(+)/공제(-)
-    settings: { minWage: 10320, stdHours: 209, weekStart: 1, otRate: 1.5 }
+    holidays: { added: {}, removed: {} },  // 기본 공휴일 목록에 더하거나 뺀 날짜
+    settings: { minWage: 10320, stdHours: 209, weekStart: 1, otRate: 1.5, holRate: 1.5 }
   };
 }
 let storageOk = true;
@@ -272,7 +331,7 @@ function save() {
 const cloud = { db: null, dir: null, dl: null, last: {}, writing: false, again: false, timer: 0 };
 const setStatus = t => { const el = document.getElementById('saveStatus'); if (el) el.textContent = t; };
 function toDocs(st) {
-  const docs = { core: { v: 1, stores: st.stores, employees: st.employees, excl: st.excl, adj: st.adj, settings: st.settings } };
+  const docs = { core: { v: 1, stores: st.stores, employees: st.employees, excl: st.excl, adj: st.adj, holidays: st.holidays, settings: st.settings } };
   for (const [id, H] of Object.entries(st.hours)) for (const [k, v] of Object.entries(H)) {
     const y = 'h-' + k.slice(0, 4); ((docs[y] ||= {})[id] ||= {})[k] = v;
   }
@@ -280,7 +339,7 @@ function toDocs(st) {
 }
 function fromDocs(docs) {
   const f = fresh(), c = docs.core;
-  const st = { ...f, stores: c.stores || f.stores, employees: c.employees || [], excl: c.excl || {}, adj: c.adj || {}, settings: { ...f.settings, ...c.settings }, hours: {} };
+  const st = { ...f, stores: c.stores || f.stores, employees: c.employees || [], excl: c.excl || {}, adj: c.adj || {}, holidays: c.holidays || f.holidays, settings: { ...f.settings, ...c.settings }, hours: {} };
   for (const [name, body] of Object.entries(docs)) if (name.startsWith('h-'))
     for (const [id, H] of Object.entries(body)) Object.assign((st.hours[id] ||= {}), H);
   return st;
@@ -343,8 +402,12 @@ function employedIn(emp, y, m) {
 function calcPart(emp, y, m) {
   const S = state.settings, H = state.hours[emp.id] || {}, ex = state.excl[emp.id] || {};
   const D = daysIn(y, m), rate = +emp.hourly || 0;
-  let hours = 0, days = 0;
-  for (let d = 1; d <= D; d++) { const h = +H[ymd(y, m, d)] || 0; if (h > 0) { hours += h; days++; } }
+  let hours = 0, days = 0, holH = 0;
+  const holDays = [];
+  for (let d = 1; d <= D; d++) {
+    const k = ymd(y, m, d), h = +H[k] || 0;
+    if (h > 0) { hours += h; days++; if (isPremiumDay(k)) { holH += h; holDays.push({ k, h, name: holidayName(k) }); } }
+  }
   const endDow = (S.weekStart + 6) % 7, weeks = [];
   for (let d = 1; d <= D; d++) {
     const end = ymd(y, m, d);
@@ -362,10 +425,11 @@ function calcPart(emp, y, m) {
   }
   const base = Math.round(hours * rate);
   const juhu = weeks.reduce((s, w) => s + w.pay, 0);
+  const hol = Math.round(holH * rate * (S.holRate - 1));  // 기본급에 이미 1배가 들어 있으므로 가산분만
   const adj = +((state.adj[emp.id] || {})[`${y}-${pad(m)}`]) || 0;
   const warns = [];
   if (rate && rate < S.minWage) warns.push(`시급 ${won(rate)}이 최저임금 ${won(S.minWage)}보다 낮습니다.`);
-  return { type: 'part', hours, days, rate, weeks, base, juhu, ot: 0, otHours: 0, adj, total: base + juhu + adj, warns };
+  return { type: 'part', hours, days, rate, weeks, base, juhu, holH, holDays, ot: hol, otHours: holH, adj, total: base + juhu + hol + adj, warns };
 }
 
 // 정직원: 월급 ÷ 해당 월 일수(28~31일)로 일할, 수습일은 지급률 적용. 추가근무 = 시간 × 통상시급 × 1.5
@@ -400,11 +464,11 @@ function dayStatus(emp, k) {
 const calc = (emp, y = ui.y, m = ui.m) => emp.type === 'full' ? calcFull(emp, y, m) : calcPart(emp, y, m);
 const staffOf = storeId => state.employees.filter(e => e.store === storeId && employedIn(e, ui.y, ui.m));
 function sumOf(list) {
-  const t = { part: 0, full: 0, partN: 0, fullN: 0, base: 0, juhu: 0, ot: 0, adj: 0, total: 0 };
+  const t = { part: 0, full: 0, partN: 0, fullN: 0, base: 0, juhu: 0, ot: 0, hol: 0, otF: 0, adj: 0, total: 0 };
   for (const e of list) {
     const c = calc(e);
     if (e.type === 'full') { t.full += c.total; t.fullN++; } else { t.part += c.total; t.partN++; }
-    t.base += c.base; t.juhu += c.juhu; t.ot += c.ot; t.adj += c.adj; t.total += c.total;
+    t.base += c.base; t.juhu += c.juhu; t.ot += c.ot; if (e.type === 'full') t.otF += c.ot; else t.hol += c.ot; t.adj += c.adj; t.total += c.total;
   }
   return t;
 }
@@ -445,12 +509,12 @@ function empRows(list, withStore = false) {
       <td class="num">${workCell(e, c)}</td>
       <td class="num">${won(c.base)}</td>
       <td class="num">${e.type === 'part' ? won(c.juhu) : '<span class="muted">–</span>'}</td>
-      <td class="num">${e.type === 'full' ? `${won(c.ot)}${c.otHours ? ` <span class="muted small">${r1(c.otHours)}h</span>` : ''}` : '<span class="muted">–</span>'}</td>
+      <td class="num">${c.ot ? `${won(c.ot)} <span class="muted small">${e.type === 'full' ? '' : '공휴일 '}${r1(c.otHours)}h</span>` : '<span class="muted">–</span>'}</td>
       <td class="num">${c.adj ? won(c.adj) : '<span class="muted">–</span>'}</td>
       <td class="num"><b>${won(c.total)}</b></td></tr>`;
   }).join('');
 }
-const EMP_HEAD = '<th>이름</th><th>구분</th><th class="num">근무</th><th class="num">기본급</th><th class="num">주휴수당</th><th class="num">추가근무수당</th><th class="num">기타</th><th class="num">지급 합계</th>';
+const EMP_HEAD = '<th>이름</th><th>구분</th><th class="num">근무</th><th class="num">기본급</th><th class="num">주휴수당</th><th class="num">추가·휴일수당</th><th class="num">기타</th><th class="num">지급 합계</th>';
 
 function renderStore() {
   const list = staffOf(ui.tab);
@@ -468,8 +532,8 @@ function renderSummary() {
   el.innerHTML = `
     <section class="tiles">
       ${tile(`${esc(store.name)} ${ui.m}월 인건비`, won(t.total), `${list.length}명`, true)}
-      ${tile('알바 합계', won(t.part), `${t.partN}명 · 주휴수당 ${won(t.juhu)}`)}
-      ${tile('정직원 합계', won(t.full), `${t.fullN}명 · 추가근무 ${won(t.ot)}`)}
+      ${tile('알바 합계', won(t.part), `${t.partN}명 · 주휴 ${won(t.juhu)} · 휴일가산 ${won(t.hol)}`)}
+      ${tile('정직원 합계', won(t.full), `${t.fullN}명 · 추가근무 ${won(t.otF)}`)}
     </section>
     <section class="panel">
       <div class="panel-head"><h2>직원별 급여 <span class="muted small">· ${ui.y}년 ${ui.m}월 (${daysIn(ui.y, ui.m)}일)</span></h2>
@@ -500,7 +564,7 @@ function renderEditor() {
            <div style="margin-top:8px"><div class="pattern">${order.map(d => `<label>${DOW[d]}<input data-pat="${d}" inputmode="decimal" placeholder="0" value="${esc((e.pattern || {})[d] || '')}"></label>`).join('')}</div>
            <div class="row" style="margin-top:8px"><button class="btn sm" data-act="fill">${ui.m}월에 채우기</button><button class="btn sm danger" data-act="clear">${ui.m}월 입력 비우기</button><span class="muted small">재직 기간 안의 날짜만 채웁니다.</span></div></div></details>`}
     <div class="scroll"><table class="cal"><thead><tr>${order.map(d => `<th>${DOW[d]}</th>`).join('')}<th>${full ? '주 추가근무' : '주 합계'}</th>${full ? '' : '<th>주휴</th>'}</tr></thead><tbody id="calBody"></tbody></table></div>
-    <div class="legend">${full ? '<span><i style="background:var(--prob)"></i>수습 기간</span><span><i style="background:var(--sunken)"></i>재직 기간 아님</span>' : '<span><i style="opacity:.5;background:var(--bg)"></i>흐린 칸 = 앞뒤 달 (해당 달 급여로 계산, 주휴 판단에만 사용)</span>'}</div>
+    <div class="legend">${full ? '<span><i style="background:var(--prob)"></i>수습 기간</span><span><i style="background:var(--sunken)"></i>재직 기간 아님</span>' : `<span><i style="background:var(--warn-soft)"></i>평일 공휴일 · 시급 ${S.holRate}배</span><span><i style="opacity:.5;background:var(--bg)"></i>흐린 칸 = 앞뒤 달 (해당 달 급여로 계산, 주휴 판단에만 사용)</span>`}</div>
     <div class="breakdown" id="breakdown"></div>`;
   renderCal(e, order);
   renderBreakdown();
@@ -518,8 +582,10 @@ function renderCal(e, order) {
       const inM = k >= first && k <= last, day = +k.slice(8), dw = dowOf(k);
       if (full && !inM) { cells += '<td class="other"></td>'; continue; }
       const st = dayStatus(e, k), v = H[k];
-      const cls = [!inM && 'other', full && st === 'prob' && 'prob', full && st === 'out' && 'out', dw === 0 && 'sun'].filter(Boolean).join(' ');
-      cells += `<td class="${cls}"><div class="d"><span>${inM ? day : `${+k.slice(5, 7)}/${day}`}</span>${full && st === 'prob' ? '<span>수습</span>' : ''}</div>
+      const hn = holidayName(k), prem = !full && isPremiumDay(k);
+      const cls = [!inM && 'other', full && st === 'prob' && 'prob', full && st === 'out' && 'out', (dw === 0 || hn) && 'sun', prem && 'hol'].filter(Boolean).join(' ');
+      const tag = hn ? `<span class="hn" title="${esc(hn)}${prem ? ` · ${S.holRate}배` : dw === 0 || dw === 6 ? ' · 주말이라 가산 없음' : ''}">${prem ? '×' + S.holRate : esc(hn.replace(/\(.*\)/, ''))}</span>` : full && st === 'prob' ? '<span>수습</span>' : '';
+      cells += `<td class="${cls}"${hn ? ` title="${esc(hn)}"` : ''}><div class="d"><span>${inM ? day : `${+k.slice(5, 7)}/${day}`}</span>${tag}</div>
         <input data-day="${k}" inputmode="decimal" aria-label="${k}" value="${v ? r1(v) : ''}" class="${v ? 'has' : ''}" ${full && st === 'out' ? 'disabled' : ''}></td>`;
     }
     const wkEnd = addDays(wkStart, 6);
@@ -560,6 +626,7 @@ function renderBreakdown() {
     left = `<div class="calc"><h3>${ui.m}월 급여 계산</h3>
       <div class="line"><div>기본급<div class="how">${hrs(c.hours)} × ${won(c.rate)}</div></div><b class="num">${won(c.base)}</b></div>
       <div class="line"><div>주휴수당<div class="how">${paid.length}주 지급 · 주 15시간 이상</div></div><b class="num">${won(c.juhu)}</b></div>
+      <div class="line"><div>공휴일 가산 (${S.holRate}배)<div class="how">${c.holH ? `평일 공휴일 ${hrs(c.holH)} × ${won(c.rate)} × ${r1(S.holRate - 1)} · ${c.holDays.map(x => `${+x.k.slice(8)}일 ${esc(x.name)}`).join(', ')}` : '이번 달 평일 공휴일 근무 없음'}</div></div><b class="num">${won(c.ot)}</b></div>
       ${c.adj ? `<div class="line"><div>기타 수당/공제</div><b class="num">${won(c.adj)}</b></div>` : ''}
       <div class="line total"><span>지급 합계</span><span class="num">${won(c.total)}</span></div>${adjBox}
       ${c.warns.map(w => `<p class="warn">${w}</p>`).join('')}</div>`;
@@ -595,9 +662,9 @@ function renderAll() {
     </section>
     <section class="panel"><div class="panel-head"><h2>매장별 요약</h2>
       <div class="row no-print"><button class="btn sm" data-act="csv">엑셀(CSV) 저장</button><button class="btn sm" data-act="print" ${window.claude ? 'hidden' : ''}>인쇄</button></div></div>
-      <div class="scroll"><table><thead><tr><th>매장</th><th class="num">알바</th><th class="num">알바 급여</th><th class="num">└ 주휴수당</th><th class="num">정직원</th><th class="num">정직원 급여</th><th class="num">└ 추가근무</th><th class="num">합계</th></tr></thead>
-      <tbody>${per.map(({ s, t }) => `<tr><td><b>${esc(s.name)}</b></td><td class="num">${t.partN}명</td><td class="num">${won(t.part)}</td><td class="num muted">${won(t.juhu)}</td><td class="num">${t.fullN}명</td><td class="num">${won(t.full)}</td><td class="num muted">${won(t.ot)}</td><td class="num"><b>${won(t.total)}</b></td></tr>`).join('')}</tbody>
-      <tfoot><tr><td>전체</td><td class="num">${g.partN}명</td><td class="num">${won(g.part)}</td><td class="num">${won(g.juhu)}</td><td class="num">${g.fullN}명</td><td class="num">${won(g.full)}</td><td class="num">${won(g.ot)}</td><td class="num">${won(g.total)}</td></tr></tfoot></table></div></section>
+      <div class="scroll"><table><thead><tr><th>매장</th><th class="num">알바</th><th class="num">알바 급여</th><th class="num">└ 주휴수당</th><th class="num">└ 휴일가산</th><th class="num">정직원</th><th class="num">정직원 급여</th><th class="num">└ 추가근무</th><th class="num">합계</th></tr></thead>
+      <tbody>${per.map(({ s, t }) => `<tr><td><b>${esc(s.name)}</b></td><td class="num">${t.partN}명</td><td class="num">${won(t.part)}</td><td class="num muted">${won(t.juhu)}</td><td class="num muted">${won(t.hol)}</td><td class="num">${t.fullN}명</td><td class="num">${won(t.full)}</td><td class="num muted">${won(t.otF)}</td><td class="num"><b>${won(t.total)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>전체</td><td class="num">${g.partN}명</td><td class="num">${won(g.part)}</td><td class="num">${won(g.juhu)}</td><td class="num">${won(g.hol)}</td><td class="num">${g.fullN}명</td><td class="num">${won(g.full)}</td><td class="num">${won(g.otF)}</td><td class="num">${won(g.total)}</td></tr></tfoot></table></div></section>
     <section class="panel"><div class="panel-head"><h2>전체 직원</h2></div>
       ${all.length ? `<div class="scroll"><table><thead><tr><th>매장</th>${EMP_HEAD}</tr></thead><tbody>${empRows(all, true)}</tbody>
       <tfoot><tr><td colspan="4">합계</td><td class="num">${won(g.base)}</td><td class="num">${won(g.juhu)}</td><td class="num">${won(g.ot)}</td><td class="num">${won(g.adj)}</td><td class="num">${won(g.total)}</td></tr></tfoot></table></div>`
@@ -613,9 +680,24 @@ function renderSettings() {
       <div class="grid2">
         <label class="field"><span>최저시급 (원) · 2026년 10,320원</span><input data-set="minWage" type="number" value="${S.minWage}"></label>
         <label class="field"><span>월 소정근로시간 (통상시급 계산) · 보통 209</span><input data-set="stdHours" type="number" value="${S.stdHours}"></label>
-        <label class="field"><span>추가근무 배율</span><input data-set="otRate" type="number" step="0.1" value="${S.otRate}"></label>
+        <label class="field"><span>정직원 추가근무 배율</span><input data-set="otRate" type="number" step="0.1" value="${S.otRate}"></label>
+        <label class="field"><span>알바 평일 공휴일 근무 배율</span><input data-set="holRate" type="number" step="0.1" min="1" value="${S.holRate}"></label>
         <label class="field"><span>한 주의 시작 요일 (주휴 계산)</span><select data-set="weekStart">${DOW.map((d, i) => `<option value="${i}" ${i === S.weekStart ? 'selected' : ''}>${d}요일 ~ ${DOW[(i + 6) % 7]}요일</option>`).join('')}</select></label>
       </div></section>
+    <section class="panel"><div class="panel-head"><h2>${ui.y}년 공휴일 <span class="muted small">· 알바 평일 공휴일 근무 ${S.holRate}배</span></h2>
+      <div class="row"><button class="btn sm" data-act="holPrev">‹ ${ui.y - 1}</button><button class="btn sm" data-act="holNext">${ui.y + 1} ›</button></div></div>
+      <p class="notice">월~금에 있는 공휴일에 일한 시간은 시급의 ${S.holRate}배로 계산합니다. 토·일과 겹친 공휴일은 가산하지 않습니다. 매장이 쉬지 않는 등 적용하지 않을 날은 체크를 끄세요.</p>
+      <div class="hol-list">${holidaysOfYear(ui.y).map(h => { const d = dowOf(h.k), wk = d === 0 || d === 6; return `<label><input type="checkbox" data-hol="${h.k}" ${h.off ? '' : 'checked'}><span class="${h.off ? 'off' : ''}">${+h.k.slice(5, 7)}/${+h.k.slice(8)}(${DOW[d]}) ${esc(h.name)}${wk ? ' <span class="muted small">주말</span>' : ''}</span>${h.custom ? `<button class="btn sm danger" data-act="holDel" data-k="${h.k}" aria-label="삭제">×</button>` : ''}</label>`; }).join('') || '<span class="muted small">이 해의 공휴일 정보가 없습니다. 아래에서 추가하거나 캘린더 파일을 불러오세요.</span>'}</div>
+      <div class="row" style="margin-top:6px">
+        <input type="date" id="holDate" class="btn" style="font-weight:400"><input id="holName" placeholder="이름 (예: 임시공휴일)" class="btn" style="font-weight:400;min-width:0;flex:1 1 140px">
+        <button class="btn sm" data-act="holAdd">공휴일 추가</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="btn sm">캘린더 파일(.ics) 불러오기<input type="file" accept=".ics,text/calendar" id="icsFile" hidden></label>
+        <a class="small" href="https://calendar.google.com/calendar/ical/ko.south_korea%23holiday%40group.v.calendar.google.com/public/basic.ics" target="_blank" rel="noopener">구글 캘린더 '대한민국 휴일' 파일 받기</a>
+      </div>
+      <p class="notice" style="margin-top:6px">구글·네이버·애플 캘린더에서 공휴일 캘린더를 .ics로 내보내 불러오면, 새로 지정된 임시공휴일도 반영됩니다. 기본 목록은 2025~2027년 정부 발표(대체·임시공휴일, 노동절·제헌절 포함) 기준입니다.</p>
+    </section>
     <section class="panel"><div class="panel-head"><h2>데이터 백업</h2></div>
       <p class="notice" style="margin-bottom:10px">${cloud.db ? '데이터는 내 claude.ai 계정에 저장되어 다른 기기에서도 이어서 볼 수 있습니다. 링크를 공유받은 사람에게는 보이지 않습니다. 그래도 매달 백업 파일을 받아 두면 안전합니다.' : '모든 데이터는 이 브라우저 안에만 저장됩니다. 다른 컴퓨터로 옮기거나 브라우저 기록을 지우기 전에 백업 파일을 저장하세요.'}</p>
       <div class="row"><button class="btn primary" data-act="export">백업 파일 저장</button><label class="btn">백업 파일 불러오기<input type="file" accept="application/json,.json" id="importFile" hidden></label><button class="btn danger" data-act="reset">전체 초기화</button></div></section>
@@ -623,6 +705,7 @@ function renderSettings() {
       <ul class="notice">
         <li><b>알바 기본급</b> = 그 달에 입력한 근무시간 합계 × 시급</li>
         <li><b>주휴수당</b> = 한 주(${DOW[S.weekStart]}~${DOW[(S.weekStart + 6) % 7]}) 근무가 15시간 이상이면 (주 근무시간 ÷ 40 × 8) × 시급, 최대 8시간분. 주 마지막 날이 속한 달에 지급하며, 달을 걸친 주는 앞 달 근무시간도 합산합니다. 퇴사로 다음 주 근무가 없으면 그 주는 지급하지 않습니다.</li>
+        <li><b>공휴일 가산</b> = 알바가 월~금 공휴일(대체·임시공휴일 포함)에 일한 시간 × 시급 × ${r1(S.holRate - 1)}. 기본급에 1배가 이미 들어 있어 합치면 ${S.holRate}배입니다.</li>
         <li><b>정직원 기본급</b> = 월급 ÷ 그 달 일수(28·29·30·31일) × 재직 일수. 수습일은 여기에 수습 지급률(기본 90%)을 곱합니다. 한 달을 모두 근무하면 월급 전액입니다.</li>
         <li><b>추가근무 수당</b> = 추가근무 시간 × 통상시급(월급 ÷ ${S.stdHours}) × ${S.otRate}. 수습 기간의 추가근무는 수습 지급률이 적용된 시급으로 계산합니다.</li>
         <li>지급 합계는 세전 금액이며 4대보험·소득세 공제는 포함하지 않습니다. 원 단위 미만은 반올림합니다.</li>
@@ -731,6 +814,19 @@ document.addEventListener('change', ev => {
     const s = state.stores.find(x => x.id === t.dataset.store); s.name = t.value.trim() || s.name; save(); renderTabs();
   } else if (t.dataset.set) {
     const v = Number(t.value); if (Number.isFinite(v) && v >= 0) { state.settings[t.dataset.set] = v; save(); }
+  } else if (t.dataset.hol) {
+    const H = (state.holidays ||= { added: {}, removed: {} }); H.removed ||= {};
+    if (t.checked) delete H.removed[t.dataset.hol]; else H.removed[t.dataset.hol] = true;
+    save(); renderSettings();
+  } else if (t.id === 'icsFile' && t.files[0]) {
+    t.files[0].text().then(txt => {
+      const got = parseIcs(txt), n = Object.keys(got).length; t.value = '';
+      if (!n) { toast('캘린더 파일에서 날짜를 찾지 못했습니다.'); return; }
+      const H = (state.holidays ||= { added: {}, removed: {} }); H.added ||= {};
+      let added = 0;
+      for (const [k, name] of Object.entries(got)) if (!KR_HOLIDAYS[k] && !H.added[k]) { H.added[k] = name; added++; }
+      save(); renderSettings(); toast(`캘린더에서 ${n}일을 읽었고, 새 공휴일 ${added}일을 추가했습니다.`);
+    });
   } else if (t.id === 'importFile' && t.files[0]) {
     t.files[0].text().then(async txt => {
       let s;
@@ -789,6 +885,15 @@ document.addEventListener('click', async ev => {
     state = fresh(); save(); ui.tab = 's1'; ui.sel = null; render(); toast('초기화했습니다.');
   }
   else if (act === 'demo') demo();
+  else if (act === 'holPrev' || act === 'holNext') { ui.y += act === 'holPrev' ? -1 : 1; render(); }
+  else if (act === 'holAdd') {
+    const k = $('#holDate').value, name = $('#holName').value.trim() || '공휴일';
+    if (!k) { toast('날짜를 선택하세요.'); return; }
+    const H = (state.holidays ||= { added: {}, removed: {} }); (H.added ||= {})[k] = name; if (H.removed) delete H.removed[k];
+    save(); ui.y = +k.slice(0, 4); render(); toast(`${k} ${name}을(를) 추가했습니다.`);
+  } else if (act === 'holDel') {
+    const k = ev.target.closest('[data-k]').dataset.k; delete state.holidays.added[k]; save(); renderSettings();
+  }
 });
 
 async function download(name, text, type) {
@@ -806,7 +911,7 @@ async function download(name, text, type) {
 function downloadCsv() {
   const stores = ui.tab === 'all' ? state.stores : state.stores.filter(s => s.id === ui.tab);
   const q = v => `"${String(v).replace(/"/g, '""')}"`;
-  const rows = [['매장', '이름', '구분', '근무시간', '근무일수', '수습일수', '기본급', '주휴수당', '추가근무시간', '추가근무수당', '기타', '지급합계']];
+  const rows = [['매장', '이름', '구분', '근무시간', '근무일수', '수습일수', '기본급', '주휴수당', '추가·공휴일 시간', '추가·공휴일 수당', '기타', '지급합계']];
   for (const s of stores) for (const e of staffOf(s.id)) {
     const c = calc(e);
     rows.push([s.name, e.name, e.type === 'full' ? '정직원' : '알바', e.type === 'full' ? '' : r1(c.hours), e.type === 'full' ? c.nDays + c.pDays : c.days, e.type === 'full' ? c.pDays : '',
