@@ -221,8 +221,9 @@ dialog h2 { font-size: 18px; }
       <label class="field"><span>퇴사일 (마지막 근무일)</span><input name="leave" type="date"></label>
     </div>
     <div class="grid2" data-for="full">
+      <label class="field"><span>수습 기간 (최대 3개월)</span><select name="probMonths">
+        <option value="0">수습 없음</option><option value="1">1개월</option><option value="2">2개월</option><option value="3">3개월</option><option value="custom">날짜 직접 입력</option></select></label>
       <label class="field"><span>수습 종료일 (이날까지 수습)</span><input name="probEnd" type="date"></label>
-      <div class="field"><span>&nbsp;</span><button type="button" class="btn sm" id="prob3">입사일 + 3개월로 설정</button></div>
     </div>
     <p id="empErr" class="warn" hidden></p>
     <div class="row" style="justify-content:flex-end">
@@ -552,7 +553,7 @@ function renderEditor() {
   if (!e) { el.hidden = true; return; }
   el.hidden = false;
   const S = state.settings, full = e.type === 'full';
-  const sub = full ? `월 ${won(e.monthly || 0)}${e.probEnd ? ` · 수습 ~${e.probEnd} (${e.probRate ?? 90}%)` : ''}` : `시급 ${won(e.hourly || 0)}`;
+  const sub = full ? `월 ${won(e.monthly || 0)}${e.probEnd ? ` · 수습 ${{ 1: '1개월', 2: '2개월', 3: '3개월' }[guessProbMonths(e)] || ''} ~${e.probEnd} (${e.probRate ?? 90}%)` : ''}` : `시급 ${won(e.hourly || 0)}`;
   const order = [0, 1, 2, 3, 4, 5, 6].map(i => (S.weekStart + i) % 7);
   el.innerHTML = `
     <div class="ed-head"><h2>${esc(e.name)}</h2><span class="badge${full ? ' full' : ''}">${full ? '정직원' : '알바'}</span><span class="muted small">${sub}${e.hire ? ` · 입사 ${e.hire}` : ''}${e.leave ? ` · 퇴사 ${e.leave}` : ''}</span>
@@ -728,13 +729,32 @@ function openEmp(e) {
   form.type.value = v.type; form.name.value = v.name || ''; form.store.value = v.store;
   form.hourly.value = v.hourly ?? ''; form.monthly.value = v.monthly ?? ''; form.probRate.value = v.probRate ?? 90;
   form.hire.value = v.hire || ''; form.leave.value = v.leave || ''; form.probEnd.value = v.probEnd || '';
+  form.probMonths.value = v.probMonths ?? guessProbMonths(v);
+  syncProb();
   $('#empErr').hidden = true;
   syncType(); dlg.showModal(); form.name.focus();
 }
-form.addEventListener('change', ev => { if (ev.target.name === 'type') syncType(); });
-$('#prob3').addEventListener('click', () => {
-  if (!form.hire.value) { $('#empErr').textContent = '입사일을 먼저 입력하세요.'; $('#empErr').hidden = false; return; }
-  form.probEnd.value = addMonths(form.hire.value, 3);
+// 예전에 저장된 직원은 수습 종료일로 개월 수를 추정
+function guessProbMonths(v) {
+  if (!v.probEnd) return '0';
+  for (const n of [1, 2, 3]) if (v.hire && addMonths(v.hire, n) === v.probEnd) return String(n);
+  return 'custom';
+}
+// 1~3개월을 고르면 입사일 기준으로 종료일을 채우고, 종료일을 직접 고치면 '직접 입력'으로 바뀜
+function syncProb() {
+  const pm = form.probMonths.value;
+  if (pm === '0') form.probEnd.value = '';
+  else if (pm !== 'custom' && form.hire.value) form.probEnd.value = addMonths(form.hire.value, +pm);
+  form.probEnd.disabled = pm === '0';
+}
+form.addEventListener('change', ev => {
+  const n = ev.target.name;
+  if (n === 'type') syncType();
+  else if (n === 'probMonths' || n === 'hire') {
+    if (n === 'probMonths' && !['0', 'custom'].includes(form.probMonths.value) && !form.hire.value) { $('#empErr').textContent = '입사일을 먼저 입력하면 종료일이 자동으로 채워집니다.'; $('#empErr').hidden = false; }
+    else $('#empErr').hidden = true;
+    syncProb();
+  } else if (n === 'probEnd') form.probMonths.value = form.probEnd.value ? guessProbMonths({ hire: form.hire.value, probEnd: form.probEnd.value }) : '0';
 });
 $('#empCancel').addEventListener('click', () => dlg.close());
 form.addEventListener('submit', ev => {
@@ -745,13 +765,19 @@ form.addEventListener('submit', ev => {
   if (t === 'part' && !(+form.hourly.value > 0)) return fail('시급을 입력하세요.');
   if (t === 'full' && !(+form.monthly.value > 0)) return fail('월 기본급을 입력하세요.');
   if (form.hire.value && form.leave.value && form.leave.value < form.hire.value) return fail('퇴사일이 입사일보다 빠릅니다.');
+  if (t === 'full' && form.probMonths.value !== '0') {
+    if (!form.probEnd.value) return fail('수습 종료일을 입력하세요. 입사일을 넣고 개월 수를 고르면 자동으로 채워집니다.');
+    if (form.hire.value && form.probEnd.value < form.hire.value) return fail('수습 종료일이 입사일보다 빠릅니다.');
+    if (form.hire.value && form.probEnd.value > addMonths(form.hire.value, 3)) return fail(`수습은 최대 3개월입니다. 종료일은 ${addMonths(form.hire.value, 3)}까지 정할 수 있습니다.`);
+  }
   const e = editing || { id: uid() };
   Object.assign(e, {
     type: t, name: form.name.value.trim(), store: form.store.value,
     hourly: t === 'part' ? +form.hourly.value : undefined,
     monthly: t === 'full' ? +form.monthly.value : undefined,
     probRate: t === 'full' ? (form.probRate.value === '' ? 90 : +form.probRate.value) : undefined,
-    probEnd: t === 'full' ? form.probEnd.value || '' : '',
+    probEnd: t === 'full' && form.probMonths.value !== '0' ? form.probEnd.value || '' : '',
+    probMonths: t === 'full' ? form.probMonths.value : undefined,
     hire: form.hire.value || '', leave: form.leave.value || ''
   });
   if (!editing) state.employees.push(e);
