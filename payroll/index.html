@@ -108,6 +108,25 @@ tbody tr.sel { background: var(--accent-soft); }
 .otgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .otbox .field input { background: var(--surface); font-size: 16px; font-weight: 700; }
 .cal input::placeholder { color: var(--muted); opacity: .45; font-size: 12px; font-weight: 400; }
+.seg .segb { flex: 1; border: 0; background: transparent; padding: 6px; border-radius: 8px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.seg .segb[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.tl { min-width: 520px; }
+.tl th, .tl td { padding: 5px 8px; }
+.tl td.dt { white-space: nowrap; }
+.tl .dw { color: var(--muted); font-size: 12px; }
+.tl tr.sun .dw, .tl tr.sun .dt b { color: var(--warn); }
+.tl tr.hol { background: var(--warn-soft); }
+.tl tr.today { box-shadow: inset 3px 0 0 var(--accent); }
+.tl tr.out { opacity: .45; }
+.tl .hn { font-size: 11px; color: var(--warn); font-weight: 700; }
+.tl input[type="time"], .tl select { padding: 6px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-variant-numeric: tabular-nums; min-width: 0; }
+.tl input[type="time"] { width: 132px; }
+.tl .tcell { display: flex; gap: 4px; align-items: center; }
+.tl .now { padding: 4px 8px; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tl tr.wkrow td { background: var(--sunken); font-size: 13px; }
+.tl tr.wkrow td { display: table-cell; }
+.tl tr.wkrow td > span:first-child { margin-right: 14px; }
+.tl .warnt { color: var(--warn); font-weight: 700; font-size: 13px; }
 .pattern { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; max-width: 520px; }
 .pattern label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); text-align: center; }
 .pattern input { width: 100%; padding: 6px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); text-align: center; }
@@ -315,6 +334,7 @@ function fresh() {
     stores: [{ id: 's1', name: '1호점' }, { id: 's2', name: '2호점' }],
     employees: [],
     hours: {},   // hours[직원id][날짜] = 알바: 근무시간, 정직원: 추가근무시간
+    times: {},   // times[직원id][날짜] = { i: 출근 'HH:MM', o: 퇴근 'HH:MM', b: 휴게(분) } → hours를 자동 계산
     excl: {},    // excl[직원id][주 마지막 날짜] = true → 그 주 주휴 제외
     adj: {},     // adj[직원id]['YYYY-MM'] = 기타 수당(+)/공제(-)
     otm: {},     // otm[직원id]['YYYY-MM'] = { work, prob } 정직원 추가근무 월 합계(날짜 없이 입력)
@@ -344,13 +364,16 @@ function toDocs(st) {
   for (const [id, H] of Object.entries(st.hours)) for (const [k, v] of Object.entries(H)) {
     const y = 'h-' + k.slice(0, 4); ((docs[y] ||= {})[id] ||= {})[k] = v;
   }
+  for (const [id, T] of Object.entries(st.times || {})) for (const [k, v] of Object.entries(T)) {
+    const y = 't-' + k.slice(0, 4); ((docs[y] ||= {})[id] ||= {})[k] = v;
+  }
   return docs;
 }
 function fromDocs(docs) {
   const f = fresh(), c = docs.core;
-  const st = { ...f, stores: c.stores || f.stores, employees: c.employees || [], excl: c.excl || {}, adj: c.adj || {}, otm: c.otm || {}, holidays: c.holidays || f.holidays, settings: { ...f.settings, ...c.settings }, hours: {} };
-  for (const [name, body] of Object.entries(docs)) if (name.startsWith('h-'))
-    for (const [id, H] of Object.entries(body)) Object.assign((st.hours[id] ||= {}), H);
+  const st = { ...f, stores: c.stores || f.stores, employees: c.employees || [], excl: c.excl || {}, adj: c.adj || {}, otm: c.otm || {}, holidays: c.holidays || f.holidays, settings: { ...f.settings, ...c.settings }, hours: {}, times: {} };
+  for (const [name, body] of Object.entries(docs)) if (name.startsWith('h-') || name.startsWith('t-'))
+    for (const [id, H] of Object.entries(body)) Object.assign(((name[0] === 'h' ? st.hours : st.times)[id] ||= {}), H);
   return st;
 }
 async function flushCloud() {
@@ -494,6 +517,29 @@ function sumOf(list) {
   return t;
 }
 
+// ---------- 출퇴근 시각 → 근무시간 ----------
+const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
+// 퇴근이 출근보다 이르면 자정을 넘긴 근무로 봄. 소수점 2자리 시간과 분을 함께 돌려줌
+function shiftHours(T) {
+  const a = toMin(T && T.i), b0 = toMin(T && T.o);
+  if (a == null || b0 == null) return null;
+  const mins = (b0 <= a ? b0 + 1440 : b0) - a - (+T.b || 0);
+  return mins > 0 ? { mins, h: Math.round(mins / 60 * 100) / 100 } : { mins, h: 0, bad: true };
+}
+const hm = mins => `${Math.floor(mins / 60)}시간${mins % 60 ? ` ${mins % 60}분` : ''}`;
+const h2 = n => (Math.round(n * 100) / 100).toFixed(2);
+const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const todayKey = () => { const d = new Date(); return ymd(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
+// 출퇴근 기록을 저장하고 근무시간을 다시 계산
+function setTimes(empId, k, T) {
+  const TT = (state.times[empId] ||= {}), H = (state.hours[empId] ||= {});
+  if (!T.i && !T.o) { delete TT[k]; delete H[k]; return null; }
+  TT[k] = { i: T.i || '', o: T.o || '', b: +T.b || 0 };
+  const r = shiftHours(TT[k]);
+  if (r && r.h > 0) H[k] = r.h; else delete H[k];
+  return r;
+}
+
 // ---------- 화면 ----------
 const $ = s => document.querySelector(s);
 const view = $('#view');
@@ -589,15 +635,62 @@ function renderEditor() {
           </div>
           <p class="hint" style="margin:6px 0 0">이번 달 추가근무 시간을 합쳐서 넣으면 됩니다. 날짜별로 기록하고 싶으면 아래 달력 칸에 넣어도 되고, 둘 다 넣으면 더해서 계산합니다.${c.calH ? ` 현재 달력 입력: ${hrs(c.calH)}` : ''}</p>
         </div>`; })()
-      : `<p class="hint">날짜 칸에 그날 <b>일한 시간</b>을 입력하세요. 숫자(5, 4.5) 또는 시각(10-15:30)으로 넣으면 됩니다. 휴게시간은 빼고 입력하세요.</p>
+      : `<div class="seg no-print" style="max-width:360px;margin-bottom:10px" role="tablist">
+           <button type="button" class="segb" data-act="pview" data-v="time" aria-selected="${ui.pview !== 'cal'}">출퇴근 시간 입력</button>
+           <button type="button" class="segb" data-act="pview" data-v="cal" aria-selected="${ui.pview === 'cal'}">달력 보기</button></div>
+         ${ui.pview === 'cal'
+           ? '<p class="hint">날짜 칸에 그날 <b>일한 시간</b>을 바로 넣을 수도 있습니다 (5, 4.5 또는 10-15:30). 직접 넣으면 그날 출퇴근 기록은 지워집니다.</p>'
+           : '<p class="hint">출근·퇴근 시각과 휴게시간을 고르면 근무시간이 <b>소수점 둘째 자리까지 자동 계산</b>됩니다. 오늘 줄의 "지금"을 누르면 현재 시각이 들어갑니다. 4시간 이상 근무하면 30분, 8시간 이상이면 1시간 이상 휴게가 법정 기준입니다.</p>'}
          <details class="no-print" style="margin-bottom:10px"><summary class="small" style="cursor:pointer">요일별 고정 근무로 한 번에 채우기</summary>
-           <div style="margin-top:8px"><div class="pattern">${order.map(d => `<label>${DOW[d]}<input data-pat="${d}" inputmode="decimal" placeholder="0" value="${esc((e.pattern || {})[d] || '')}"></label>`).join('')}</div>
+           <div style="margin-top:8px"><p class="small muted" style="margin-bottom:6px">시간(5) 또는 출퇴근 시각(10-15:30)으로 넣으세요. 시각으로 넣으면 출퇴근 기록까지 채워지고, 휴게는 마지막에 고른 값(${+e.defBrk || 0}분)을 씁니다.</p><div class="pattern">${order.map(d => `<label>${DOW[d]}<input data-pat="${d}" placeholder="0" value="${esc((e.pattern || {})[d] || '')}"></label>`).join('')}</div>
            <div class="row" style="margin-top:8px"><button class="btn sm" data-act="fill">${ui.m}월에 채우기</button><button class="btn sm danger" data-act="clear">${ui.m}월 입력 비우기</button><span class="muted small">재직 기간 안의 날짜만 채웁니다.</span></div></div></details>`}
-    <div class="scroll"><table class="cal"><thead><tr>${order.map(d => `<th>${DOW[d]}</th>`).join('')}<th>${full ? '주 추가근무' : '주 합계'}</th>${full ? '' : '<th>주휴</th>'}</tr></thead><tbody id="calBody"></tbody></table></div>
+    ${!full && ui.pview !== 'cal' ? '<div class="scroll"><table class="tl"><thead><tr><th>날짜</th><th>출근</th><th>퇴근</th><th>휴게</th><th class="num">근무시간</th></tr></thead><tbody id="tlBody"></tbody></table></div>' : `<div class="scroll"><table class="cal"><thead><tr>${order.map(d => `<th>${DOW[d]}</th>`).join('')}<th>${full ? '주 추가근무' : '주 합계'}</th>${full ? '' : '<th>주휴</th>'}</tr></thead><tbody id="calBody"></tbody></table></div>`}
     <div class="legend">${full ? '<span><i style="background:var(--prob)"></i>수습 기간</span><span><i style="background:var(--sunken)"></i>재직 기간 아님</span>' : `<span><i style="background:var(--warn-soft)"></i>평일 공휴일 · 시급 ${S.holRate}배</span><span><i style="opacity:.5;background:var(--bg)"></i>흐린 칸 = 앞뒤 달 (해당 달 급여로 계산, 주휴 판단에만 사용)</span>`}</div>
     <div class="breakdown" id="breakdown"></div>`;
-  renderCal(e, order);
+  if (!full && ui.pview !== 'cal') renderTimeList(e); else renderCal(e, order);
   renderBreakdown();
+}
+
+// 알바 출퇴근 입력표: 이번 달 하루 한 줄, 주가 끝날 때 주 합계·주휴 줄
+function renderTimeList(e) {
+  const S = state.settings, T = state.times[e.id] || {}, H = state.hours[e.id] || {};
+  const D = daysIn(ui.y, ui.m), endDow = (S.weekStart + 6) % 7, today = todayKey();
+  const brkOpts = v => [0, 30, 60, 90, 120].concat([0, 30, 60, 90, 120].includes(+v) ? [] : [+v]).map(n => `<option value="${n}" ${+v === n ? 'selected' : ''}>${n ? n + '분' : '없음'}</option>`).join('');
+  const rows = [];
+  for (let d = 1; d <= D; d++) {
+    const k = ymd(ui.y, ui.m, d), dw = dowOf(k), t = T[k] || {}, hn = holidayName(k), prem = isPremiumDay(k);
+    const out = dayStatus(e, k) === 'out', isToday = k === today;
+    const brk = k in T ? +t.b || 0 : +e.defBrk || 0;
+    const nowBtn = w => isToday ? `<button type="button" class="btn sm now" data-act="now" data-w="${w}" data-k="${k}">지금</button>` : '';
+    rows.push(`<tr class="${[dw === 0 || hn ? 'sun' : '', prem ? 'hol' : '', out ? 'out' : '', isToday ? 'today' : ''].join(' ')}">
+      <td class="dt"><b>${ui.m}/${d}</b> <span class="dw">${DOW[dw]}</span>${hn ? `<div class="hn">${esc(hn)}${prem ? ` ×${S.holRate}` : ''}</div>` : ''}${isToday ? '<div class="hn" style="color:var(--accent)">오늘</div>' : ''}</td>
+      <td><div class="tcell"><input type="time" data-ti="${k}" value="${esc(t.i || '')}" aria-label="${k} 출근">${t.i ? '' : nowBtn('i')}</div></td>
+      <td><div class="tcell"><input type="time" data-to="${k}" value="${esc(t.o || '')}" aria-label="${k} 퇴근">${t.i && !t.o ? nowBtn('o') : ''}</div></td>
+      <td><select data-tb="${k}" aria-label="${k} 휴게">${brkOpts(brk)}</select></td>
+      <td class="num" data-th="${k}"></td></tr>`);
+    if (dw === endDow || d === D) rows.push(`<tr class="wkrow"><td colspan="5" data-tw="${addDays(k, (endDow - dw + 7) % 7)}"></td></tr>`);
+  }
+  $('#tlBody').innerHTML = rows.join('');
+  updateTimeList(e);
+}
+function updateTimeList(e) {
+  const T = state.times[e.id] || {}, H = state.hours[e.id] || {}, last = ymd(ui.y, ui.m, daysIn(ui.y, ui.m));
+  document.querySelectorAll('#tlBody [data-th]').forEach(td => {
+    const k = td.dataset.th, r = T[k] ? shiftHours(T[k]) : null;
+    if (r && r.bad) td.innerHTML = '<span class="warnt">시간 확인</span>';
+    else if (r) td.innerHTML = `<b>${h2(r.h)}</b><div class="small muted">${hm(r.mins)}</div>`;
+    else if (T[k] && T[k].i) td.innerHTML = '<span class="small muted">퇴근 전</span>';
+    else if (H[k]) td.innerHTML = `<b>${h2(H[k])}</b><div class="small muted">직접 입력</div>`;
+    else td.innerHTML = '<span class="muted">–</span>';
+  });
+  const c = calcPart(e, ui.y, ui.m);
+  document.querySelectorAll('#tlBody [data-tw]').forEach(td => {
+    const end = td.dataset.tw, start = addDays(end, -6);
+    let wh = 0; for (let i = 0; i < 7; i++) wh += +H[addDays(start, i)] || 0;
+    const w = c.weeks.find(x => x.end === end);
+    const jh = end > last ? '주휴는 다음 달에 정산' : w && w.pay ? `주휴수당 <b class="juhu-ok">${won(w.pay)}</b>` : `주휴 없음 (${w ? w.note : ''})`;
+    td.innerHTML = `<span>${md(start)}~${md(end)} 주 합계 <b>${h2(wh)}시간</b></span><span>${jh}</span>`;
+  });
 }
 
 function renderCal(e, order) {
@@ -864,10 +957,20 @@ function afterEdit() { save(); renderSummary(); const e = state.employees.find(x
 
 document.addEventListener('change', ev => {
   const t = ev.target;
-  if (t.dataset.day) {
+  if (t.dataset.ti || t.dataset.to || t.dataset.tb) {
+    const k = t.dataset.ti || t.dataset.to || t.dataset.tb, row = t.closest('tr');
+    const T = { i: row.querySelector('[data-ti]').value, o: row.querySelector('[data-to]').value, b: +row.querySelector('[data-tb]').value };
+    const e = state.employees.find(x => x.id === ui.sel);
+    if (t.dataset.tb) e.defBrk = T.b;  // 다음 날 기본 휴게로 기억
+    const r = setTimes(ui.sel, k, T);
+    if (r && r.bad) toast('퇴근 시각에서 휴게시간을 빼면 0분 이하입니다. 시간을 확인하세요.');
+    save(); renderSummary(); renderBreakdown();
+    if (t.dataset.ti && T.i && !T.o) renderTimeList(e); else updateTimeList(e);
+  } else if (t.dataset.day) {
     const v = parseHours(t.value), H = (state.hours[ui.sel] ||= {});
     if (Number.isNaN(v)) { t.classList.add('bad'); return; }
     t.classList.remove('bad');
+    if (state.times[ui.sel]) delete state.times[ui.sel][t.dataset.day];  // 달력에 직접 넣으면 출퇴근 기록 대신 사용
     if (v) H[t.dataset.day] = v; else delete H[t.dataset.day];
     t.value = v ? r1(v) : ''; t.classList.toggle('has', !!v);
     afterEdit();
@@ -889,8 +992,10 @@ document.addEventListener('change', ev => {
     if (v) a[k] = v; else delete a[k];
     afterEdit();
   } else if (t.dataset.pat !== undefined) {
-    const e = state.employees.find(x => x.id === ui.sel), v = parseHours(t.value);
-    (e.pattern ||= {})[t.dataset.pat] = Number.isNaN(v) ? 0 : v; t.value = v || ''; save();
+    const e = state.employees.find(x => x.id === ui.sel), raw = t.value.trim().replace(/\s/g, ''), v = parseHours(raw);
+    const rg = /^(\d{1,2})(?::(\d{2}))?[-~](\d{1,2})(?::(\d{2}))?$/.exec(raw);
+    (e.pattern ||= {})[t.dataset.pat] = Number.isNaN(v) ? 0 : rg ? `${pad(+rg[1])}:${rg[2] || '00'}-${pad(+rg[3])}:${rg[4] || '00'}` : v;
+    t.value = e.pattern[t.dataset.pat] || ''; save();
   } else if (t.dataset.store) {
     const s = state.stores.find(x => x.id === t.dataset.store); s.name = t.value.trim() || s.name; save(); renderTabs();
   } else if (t.dataset.set) {
@@ -946,16 +1051,18 @@ document.addEventListener('click', async ev => {
   else if (act === 'del') {
     if (!await ask(`${e.name} 님과 모든 근무 기록을 삭제할까요?`, '삭제')) return;
     state.employees = state.employees.filter(x => x !== e);
-    delete state.hours[e.id]; delete state.excl[e.id]; delete state.adj[e.id]; delete state.otm[e.id];
+    delete state.hours[e.id]; delete state.excl[e.id]; delete state.adj[e.id]; delete state.otm[e.id]; if (state.times) delete state.times[e.id];
     ui.sel = null; save(); render();
   } else if (act === 'fill' || act === 'clear') {
-    const H = (state.hours[e.id] ||= {}), P = e.pattern || {};
+    const H = (state.hours[e.id] ||= {}), TT = (state.times[e.id] ||= {}), P = e.pattern || {};
     if (act === 'clear' && !await ask(`${ui.m}월 입력을 모두 지울까요?`, '비우기')) return;
     for (let d = 1; d <= daysIn(ui.y, ui.m); d++) {
       const k = ymd(ui.y, ui.m, d);
-      if (act === 'clear') { delete H[k]; continue; }
+      if (act === 'clear') { delete H[k]; delete TT[k]; continue; }
       if (dayStatus(e, k) === 'out') continue;
-      const v = +P[dowOf(k)] || 0; if (v) H[k] = v; else delete H[k];
+      const pv = P[dowOf(k)];
+      if (typeof pv === 'string' && pv.includes('-')) { const [i, o] = pv.split('-'); setTimes(e.id, k, { i, o, b: +e.defBrk || 0 }); }
+      else { delete TT[k]; const v = +pv || 0; if (v) H[k] = v; else delete H[k]; }
     }
     save(); renderSummary(); renderEditor();
   } else if (act === 'csv') downloadCsv();
@@ -966,6 +1073,14 @@ document.addEventListener('click', async ev => {
     state = fresh(); save(); ui.tab = 's1'; ui.sel = null; render(); toast('초기화했습니다.');
   }
   else if (act === 'demo') demo();
+  else if (act === 'pview') { ui.pview = ev.target.closest('[data-v]').dataset.v; renderEditor(); }
+  else if (act === 'now') {
+    const b = ev.target.closest('[data-k]'), k = b.dataset.k, row = b.closest('tr');
+    const T = { i: row.querySelector('[data-ti]').value, o: row.querySelector('[data-to]').value, b: +row.querySelector('[data-tb]').value };
+    T[b.dataset.w] = nowHM();
+    setTimes(e.id, k, T); save(); renderSummary(); renderBreakdown(); renderTimeList(e);
+    toast(`${b.dataset.w === 'i' ? '출근' : '퇴근'} ${T[b.dataset.w]} 기록했습니다.`);
+  }
   else if (act === 'holPrev' || act === 'holNext') { ui.y += act === 'holPrev' ? -1 : 1; render(); }
   else if (act === 'holAdd') {
     const k = $('#holDate').value, name = $('#holName').value.trim() || '공휴일';
@@ -1007,7 +1122,7 @@ function downloadCsv() {
 function demo() {
   const y = ui.y, m = ui.m, mk = (dy, dm = 0) => ymd(y, m + dm, dy);
   const E = [
-    { id: uid(), type: 'part', name: '김민지', store: 's1', hourly: 10320, hire: mk(1, -6), pattern: { 1: 5, 3: 5, 5: 5 } },
+    { id: uid(), type: 'part', name: '김민지', store: 's1', hourly: 10320, hire: mk(1, -6), defBrk: 30, pattern: { 1: '10:00-15:30', 3: '10:00-15:30', 5: '10:00-15:30' } },
     { id: uid(), type: 'part', name: '이서준', store: 's1', hourly: 10500, hire: mk(1, -2), pattern: { 6: 6, 0: 6 } },
     { id: uid(), type: 'full', name: '박지훈', store: 's1', monthly: 2500000, probRate: 90, hire: mk(16, -2), probEnd: addMonths(mk(16, -2), 3) },
     { id: uid(), type: 'part', name: '최유나', store: 's2', hourly: 10320, hire: mk(1, -3), pattern: { 1: 4, 2: 4, 3: 4, 4: 4, 5: 4 } },
@@ -1017,7 +1132,7 @@ function demo() {
     state.employees.push(e);
     const H = (state.hours[e.id] = {});
     if (e.type === 'part') {
-      for (let d = -6; d <= daysIn(y, m); d++) { const k = mk(d); if (k >= e.hire) { const v = e.pattern[dowOf(k)]; if (v) H[k] = v; } }
+      for (let d = -6; d <= daysIn(y, m); d++) { const k = mk(d); if (k >= e.hire) { const v = e.pattern[dowOf(k)]; if (typeof v === 'string') { const [i, o] = v.split('-'); setTimes(e.id, k, { i, o, b: e.defBrk }); } else if (v) H[k] = v; } }
     } else { H[mk(15)] = 2; H[mk(22)] = 1.5; H[mk(27)] = 3; }
   }
   save(); ui.tab = 's1'; ui.sel = E[0].id; render();
