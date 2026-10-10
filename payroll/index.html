@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>매장 급여 계산기</title>
+<style>
+/* 매장별 탭 → 직원 표 → 선택한 직원의 달력 입력. 숫자는 모두 고정폭 숫자로 정렬 */
+:root {
+  --bg: #F4F3EF;
+  --surface: #FFFFFF;
+  --sunken: #ECEAE4;
+  --ink: #1B1D1F;
+  --muted: #6B6E72;
+  --line: #DCD9D2;
+  --accent: #0E6E5C;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DDEFEA;
+  --prob: #FFF1D6;
+  --prob-ink: #8A5A00;
+  --warn: #B3261E;
+  --warn-soft: #FBE4E2;
+  --radius: 10px;
+  --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121416; --surface: #1C1F22; --sunken: #262A2E; --ink: #EDEDEA; --muted: #9EA3A8;
+    --line: #33383D; --accent: #4CC2A6; --accent-ink: #0B1512; --accent-soft: #173A33;
+    --prob: #3A2E14; --prob-ink: #F2C46B; --warn: #FF8A80; --warn-soft: #3B1D1B;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121416; --surface: #1C1F22; --sunken: #262A2E; --ink: #EDEDEA; --muted: #9EA3A8;
+  --line: #33383D; --accent: #4CC2A6; --accent-ink: #0B1512; --accent-soft: #173A33;
+  --prob: #3A2E14; --prob-ink: #F2C46B; --warn: #FF8A80; --warn-soft: #3B1D1B;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 18px 16px 56px; }
+h1, h2, h3 { margin: 0; line-height: 1.3; }
+p { margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 20px; padding-bottom: 14px; border-bottom: 3px solid var(--accent); }
+.brand h1 { font-size: 24px; letter-spacing: -0.01em; }
+.brand p { color: var(--muted); font-size: 13px; }
+.month { display: flex; align-items: center; gap: 6px; }
+.month input { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-weight: 600; }
+.iconbtn { width: 34px; height: 34px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; cursor: pointer; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 16px 0; background: var(--sunken); padding: 4px; border-radius: 999px; width: fit-content; max-width: 100%; }
+.tabs button { border: 0; background: transparent; padding: 7px 16px; border-radius: 999px; cursor: pointer; color: var(--muted); font-weight: 600; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* Buttons */
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.danger { color: var(--warn); }
+.btn.sm { padding: 4px 10px; font-size: 13px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.tile .label { color: var(--muted); font-size: 13px; }
+.tile .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.tile.hero { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tile.hero .label { color: inherit; opacity: .85; }
+.tile .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.tile.hero .sub { color: inherit; opacity: .85; }
+
+/* Panels & tables */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.panel-head h2 { font-size: 17px; }
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+td b { white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+tfoot td { font-weight: 700; border-top: 2px solid var(--ink); border-bottom: 0; }
+tbody tr.pick { cursor: pointer; }
+tbody tr.pick:hover { background: var(--sunken); }
+tbody tr.sel { background: var(--accent-soft); }
+.badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--sunken); color: var(--muted); font-weight: 600; white-space: nowrap; }
+.badge.full { background: var(--accent-soft); color: var(--accent); }
+.empty { text-align: center; padding: 28px 12px; color: var(--muted); }
+.empty .row { justify-content: center; margin-top: 12px; }
+
+/* Editor */
+.ed-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+.ed-head h2 { font-size: 19px; }
+.ed-head .row { margin-left: auto; }
+.hint { font-size: 13px; color: var(--muted); margin: 6px 0 10px; }
+.pattern { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; max-width: 520px; }
+.pattern label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); text-align: center; }
+.pattern input { width: 100%; padding: 6px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); text-align: center; }
+.cal { min-width: 640px; table-layout: fixed; }
+.cal th { text-align: center; }
+.cal td { padding: 4px; vertical-align: top; border: 1px solid var(--line); }
+.cal td.wk { background: var(--sunken); font-size: 13px; text-align: right; vertical-align: middle; padding: 4px 8px; }
+.cal .d { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; }
+.cal input { width: 100%; padding: 5px 4px; border: 1px solid transparent; border-radius: 6px; background: var(--bg); text-align: center; font-variant-numeric: tabular-nums; }
+.cal input:focus { border-color: var(--accent); }
+.cal input[type="checkbox"] { width: auto; padding: 0; margin: 0; }
+.cal input.has { background: var(--accent-soft); font-weight: 700; }
+.cal input.bad { border-color: var(--warn); background: var(--warn-soft); }
+.cal td.other { opacity: .5; }
+.cal td.prob { background: var(--prob); }
+.cal td.prob .d { color: var(--prob-ink); }
+.cal td.out { background: repeating-linear-gradient(135deg, transparent 0 6px, var(--sunken) 6px 8px); }
+.cal td.out input { visibility: hidden; }
+.cal td.sun .d span:first-child { color: var(--warn); }
+.juhu-ok { color: var(--accent); font-weight: 700; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; border: 1px solid var(--line); }
+
+.breakdown { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+@media (max-width: 760px) { .breakdown { grid-template-columns: minmax(0, 1fr); } }
+.calc { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+.calc h3 { font-size: 14px; margin-bottom: 6px; }
+.line { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+.line:last-child { border-bottom: 0; }
+.line .how { font-size: 12px; color: var(--muted); }
+.line.total { font-weight: 800; font-size: 17px; border-top: 2px solid var(--ink); border-bottom: 0; margin-top: 4px; padding-top: 8px; }
+.warn { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 10px; }
+.field { display: grid; gap: 4px; }
+.field > span { font-size: 13px; color: var(--muted); font-weight: 600; }
+.field input, .field select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); width: 100%; }
+.adj { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.adj input { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); text-align: right; }
+
+/* Dialog & settings */
+dialog { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(520px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+dialog form { padding: 18px; display: grid; gap: 12px; }
+dialog h2 { font-size: 18px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 480px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+.seg { display: flex; gap: 4px; background: var(--sunken); padding: 4px; border-radius: 10px; }
+.seg label { flex: 1; text-align: center; padding: 6px; border-radius: 8px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.settings { display: grid; gap: 16px; }
+.notice { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.notice li { margin-bottom: 2px; }
+
+@media print {
+  .tabs, .month, .no-print, .btn, .iconbtn { display: none !important; }
+  body { background: #fff; color: #000; }
+  .panel, .tile { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>매장 급여 계산기</h1>
+      <p>알바 주휴수당 · 정직원 수습 일할계산 · 추가근무 1.5배</p>
+    </div>
+    <div class="month">
+      <button class="iconbtn" id="prevM" aria-label="이전 달">‹</button>
+      <input type="month" id="month" aria-label="급여 월">
+      <button class="iconbtn" id="nextM" aria-label="다음 달">›</button>
+    </div>
+  </header>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <div id="storageWarn" class="warn" hidden>이 브라우저에서는 데이터가 저장되지 않습니다. 설정 탭의 "백업 파일 저장"으로 꼭 보관하세요.</div>
+  <main id="view"></main>
+</div>
+
+<dialog id="empDlg">
+  <form id="empForm" method="dialog">
+    <h2 id="empDlgTitle">직원 추가</h2>
+    <div class="seg" role="radiogroup" aria-label="구분">
+      <label><input type="radio" name="type" value="part" checked>알바 (시급)</label>
+      <label><input type="radio" name="type" value="full">정직원 (월급)</label>
+    </div>
+    <div class="grid2">
+      <label class="field"><span>이름</span><input name="name" required autocomplete="off"></label>
+      <label class="field"><span>매장</span><select name="store"></select></label>
+    </div>
+    <div class="grid2" data-for="part">
+      <label class="field"><span>시급 (원)</span><input name="hourly" type="number" min="0" step="10" inputmode="numeric"></label>
+    </div>
+    <div class="grid2" data-for="full">
+      <label class="field"><span>월 기본급 (원)</span><input name="monthly" type="number" min="0" step="1000" inputmode="numeric"></label>
+      <label class="field"><span>수습 지급률 (%)</span><input name="probRate" type="number" min="0" max="100" step="1" value="90"></label>
+    </div>
+    <div class="grid2">
+      <label class="field"><span>입사일</span><input name="hire" type="date"></label>
+      <label class="field"><span>퇴사일 (마지막 근무일)</span><input name="leave" type="date"></label>
+    </div>
+    <div class="grid2" data-for="full">
+      <label class="field"><span>수습 종료일 (이날까지 수습)</span><input name="probEnd" type="date"></label>
+      <div class="field"><span>&nbsp;</span><button type="button" class="btn sm" id="prob3">입사일 + 3개월로 설정</button></div>
+    </div>
+    <p id="empErr" class="warn" hidden></p>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" class="btn" id="empCancel">취소</button>
+      <button type="submit" class="btn primary">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const KEY = 'store-payroll-v1';
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+
+// ---------- 날짜 도우미 (모두 로컬 날짜 'YYYY-MM-DD' 문자열로 다룸) ----------
+const pad = n => String(n).padStart(2, '0');
+const ymd = (y, m, d) => { const t = new Date(y, m - 1, d); return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`; };
+const daysIn = (y, m) => new Date(y, m, 0).getDate();
+const dowOf = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d).getDay(); };
+const addDays = (k, n) => { const [y, m, d] = k.split('-').map(Number); return ymd(y, m, d + n); };
+const r1 = n => Math.round(n * 100) / 100;
+const won = n => Math.round(n).toLocaleString('ko-KR') + '원';
+const hrs = n => r1(n).toLocaleString('ko-KR') + '시간';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+// ---------- 저장 ----------
+function fresh() {
+  return {
+    stores: [{ id: 's1', name: '1호점' }, { id: 's2', name: '2호점' }],
+    employees: [],
+    hours: {},   // hours[직원id][날짜] = 알바: 근무시간, 정직원: 추가근무시간
+    excl: {},    // excl[직원id][주 마지막 날짜] = true → 그 주 주휴 제외
+    adj: {},     // adj[직원id]['YYYY-MM'] = 기타 수당(+)/공제(-)
+    settings: { minWage: 10320, stdHours: 209, weekStart: 1, otRate: 1.5 }
+  };
+}
+let storageOk = true;
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { const s = JSON.parse(raw); const f = fresh(); return { ...f, ...s, settings: { ...f.settings, ...s.settings } }; }
+  } catch (e) { storageOk = false; }
+  return fresh();
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch (e) { storageOk = false; document.getElementById('storageWarn').hidden = false; }
+}
+let state = load();
+const now = new Date();
+let ui = { y: now.getFullYear(), m: now.getMonth() + 1, tab: 's1', sel: null };
+try { const u = JSON.parse(localStorage.getItem(KEY + '-ui') || '{}'); if (u.tab) ui.tab = u.tab; if (u.sel) ui.sel = u.sel; } catch (e) {}
+const saveUi = () => { try { localStorage.setItem(KEY + '-ui', JSON.stringify({ tab: ui.tab, sel: ui.sel })); } catch (e) {} };
+
+// ---------- 계산 ----------
+function employedIn(emp, y, m) {
+  const a = ymd(y, m, 1), b = ymd(y, m, daysIn(y, m));
+  return (!emp.hire || emp.hire <= b) && (!emp.leave || emp.leave >= a);
+}
+
+// 알바: 이번 달 근무시간 × 시급 + 이번 달에 끝나는 주의 주휴수당
+function calcPart(emp, y, m) {
+  const S = state.settings, H = state.hours[emp.id] || {}, ex = state.excl[emp.id] || {};
+  const D = daysIn(y, m), rate = +emp.hourly || 0;
+  let hours = 0, days = 0;
+  for (let d = 1; d <= D; d++) { const h = +H[ymd(y, m, d)] || 0; if (h > 0) { hours += h; days++; } }
+  const endDow = (S.weekStart + 6) % 7, weeks = [];
+  for (let d = 1; d <= D; d++) {
+    const end = ymd(y, m, d);
+    if (dowOf(end) !== endDow) continue;
+    const start = addDays(end, -6);
+    let wh = 0;
+    for (let i = 0; i < 7; i++) wh += +H[addDays(start, i)] || 0;
+    const w = { start, end, hours: wh, jh: 0, pay: 0, note: '' };
+    if (ex[end]) w.note = '제외';
+    else if (!wh) w.note = '근무 없음';
+    else if (wh < 15) w.note = '15시간 미만';
+    else if (emp.leave && emp.leave <= end) w.note = '퇴사 주';
+    else { w.jh = Math.min(wh, 40) / 40 * 8; w.pay = Math.round(w.jh * rate); }
+    weeks.push(w);
+  }
+  const base = Math.round(hours * rate);
+  const juhu = weeks.reduce((s, w) => s + w.pay, 0);
+  const adj = +((state.adj[emp.id] || {})[`${y}-${pad(m)}`]) || 0;
+  const warns = [];
+  if (rate && rate < S.minWage) warns.push(`시급 ${won(rate)}이 최저임금 ${won(S.minWage)}보다 낮습니다.`);
+  return { type: 'part', hours, days, rate, weeks, base, juhu, ot: 0, otHours: 0, adj, total: base + juhu + adj, warns };
+}
+
+// 정직원: 월급 ÷ 해당 월 일수(28~31일)로 일할, 수습일은 지급률 적용. 추가근무 = 시간 × 통상시급 × 1.5
+function calcFull(emp, y, m) {
+  const S = state.settings, H = state.hours[emp.id] || {};
+  const D = daysIn(y, m), M = +emp.monthly || 0;
+  const p = (emp.probRate ?? 90) / 100, daily = M / D, std = M / S.stdHours;
+  let nDays = 0, pDays = 0, otH = 0, otHp = 0, otPay = 0;
+  for (let d = 1; d <= D; d++) {
+    const k = ymd(y, m, d), st = dayStatus(emp, k);
+    if (st === 'work') nDays++; else if (st === 'prob') pDays++;
+    const h = st === 'out' ? 0 : (+H[k] || 0);
+    if (h) { otH += h; if (st === 'prob') otHp += h; otPay += h * std * (st === 'prob' ? p : 1) * S.otRate; }
+  }
+  const baseN = Math.round(daily * nDays), baseP = Math.round(daily * p * pDays);
+  const ot = Math.round(otPay);
+  const adj = +((state.adj[emp.id] || {})[`${y}-${pad(m)}`]) || 0;
+  const warns = [];
+  if (M && std < S.minWage) warns.push(`통상시급 ${won(std)}(월급 ÷ ${S.stdHours}시간)이 최저임금 ${won(S.minWage)}보다 낮습니다.`);
+  if (pDays && std * p < S.minWage) {
+    warns.push(`수습 시급 ${won(std * p)}이 최저임금보다 낮습니다. 최저임금 90% 감액은 1년 이상 계약·단순노무직 아님·수습 3개월 이내일 때만 가능합니다.`);
+    if (emp.hire && emp.probEnd && emp.probEnd > addMonths(emp.hire, 3)) warns.push('수습 종료일이 입사 후 3개월을 넘습니다. 3개월 이후에는 최저임금 감액이 허용되지 않습니다.');
+  }
+  return { type: 'full', D, M, p, daily, std, nDays, pDays, baseN, baseP, base: baseN + baseP, otHours: otH, otHp, ot, juhu: 0, hours: 0, adj, total: baseN + baseP + ot + adj, warns };
+}
+function addMonths(k, n) { const [y, m, d] = k.split('-').map(Number); return ymd(y, m + n, d - 1); }
+function dayStatus(emp, k) {
+  if ((emp.hire && k < emp.hire) || (emp.leave && k > emp.leave)) return 'out';
+  if (emp.type === 'full' && emp.probEnd && k <= emp.probEnd) return 'prob';
+  return 'work';
+}
+const calc = (emp, y = ui.y, m = ui.m) => emp.type === 'full' ? calcFull(emp, y, m) : calcPart(emp, y, m);
+const staffOf = storeId => state.employees.filter(e => e.store === storeId && employedIn(e, ui.y, ui.m));
+function sumOf(list) {
+  const t = { part: 0, full: 0, partN: 0, fullN: 0, base: 0, juhu: 0, ot: 0, adj: 0, total: 0 };
+  for (const e of list) {
+    const c = calc(e);
+    if (e.type === 'full') { t.full += c.total; t.fullN++; } else { t.part += c.total; t.partN++; }
+    t.base += c.base; t.juhu += c.juhu; t.ot += c.ot; t.adj += c.adj; t.total += c.total;
+  }
+  return t;
+}
+
+// ---------- 화면 ----------
+const $ = s => document.querySelector(s);
+const view = $('#view');
+
+function renderTabs() {
+  const tabs = [...state.stores.map(s => [s.id, s.name]), ['all', '전체 합계'], ['set', '설정']];
+  if (!tabs.some(t => t[0] === ui.tab)) ui.tab = 's1';
+  $('#tabs').innerHTML = tabs.map(([id, n]) => `<button role="tab" data-tab="${id}" aria-selected="${ui.tab === id}">${esc(n)}</button>`).join('');
+}
+function render() {
+  $('#month').value = `${ui.y}-${pad(ui.m)}`;
+  $('#storageWarn').hidden = storageOk;
+  renderTabs();
+  if (ui.tab === 'all') renderAll();
+  else if (ui.tab === 'set') renderSettings();
+  else renderStore();
+}
+
+function tile(label, value, sub = '', hero = false) {
+  return `<div class="tile${hero ? ' hero' : ''}"><div class="label">${label}</div><div class="value">${value}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+}
+function workCell(e, c) {
+  return e.type === 'full'
+    ? `${c.nDays + c.pDays}일${c.pDays ? ` <span class="muted small">(수습 ${c.pDays})</span>` : ''}`
+    : `${hrs(c.hours)} <span class="muted small">${c.days}일</span>`;
+}
+function empRows(list, withStore = false) {
+  return list.map(e => {
+    const c = calc(e);
+    const store = withStore ? `<td>${esc(state.stores.find(s => s.id === e.store)?.name)}</td>` : '';
+    return `<tr class="pick${ui.sel === e.id ? ' sel' : ''}" data-emp="${e.id}" tabindex="0">${store}
+      <td><b>${esc(e.name)}</b>${c.warns.length ? ' <span title="확인 필요" style="color:var(--warn)">●</span>' : ''}</td>
+      <td><span class="badge${e.type === 'full' ? ' full' : ''}">${e.type === 'full' ? '정직원' : '알바'}</span></td>
+      <td class="num">${workCell(e, c)}</td>
+      <td class="num">${won(c.base)}</td>
+      <td class="num">${e.type === 'part' ? won(c.juhu) : '<span class="muted">–</span>'}</td>
+      <td class="num">${e.type === 'full' ? `${won(c.ot)}${c.otHours ? ` <span class="muted small">${r1(c.otHours)}h</span>` : ''}` : '<span class="muted">–</span>'}</td>
+      <td class="num">${c.adj ? won(c.adj) : '<span class="muted">–</span>'}</td>
+      <td class="num"><b>${won(c.total)}</b></td></tr>`;
+  }).join('');
+}
+const EMP_HEAD = '<th>이름</th><th>구분</th><th class="num">근무</th><th class="num">기본급</th><th class="num">주휴수당</th><th class="num">추가근무수당</th><th class="num">기타</th><th class="num">지급 합계</th>';
+
+function renderStore() {
+  const list = staffOf(ui.tab);
+  if (ui.sel && !list.some(e => e.id === ui.sel)) ui.sel = null;
+  if (!ui.sel && list.length) ui.sel = list[0].id;
+  view.innerHTML = `<div id="summary"></div><section class="panel" id="editor" ${ui.sel ? '' : 'hidden'}></section>`;
+  renderSummary();
+  renderEditor();
+}
+function renderSummary() {
+  const el = $('#summary'); if (!el) return;
+  const list = staffOf(ui.tab), t = sumOf(list);
+  const store = state.stores.find(s => s.id === ui.tab);
+  const others = state.employees.filter(e => e.store === ui.tab && !employedIn(e, ui.y, ui.m)).length;
+  el.innerHTML = `
+    <section class="tiles">
+      ${tile(`${esc(store.name)} ${ui.m}월 인건비`, won(t.total), `${list.length}명`, true)}
+      ${tile('알바 합계', won(t.part), `${t.partN}명 · 주휴수당 ${won(t.juhu)}`)}
+      ${tile('정직원 합계', won(t.full), `${t.fullN}명 · 추가근무 ${won(t.ot)}`)}
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>직원별 급여 <span class="muted small">· ${ui.y}년 ${ui.m}월 (${daysIn(ui.y, ui.m)}일)</span></h2>
+        <div class="row no-print"><button class="btn sm" data-act="csv">엑셀(CSV) 저장</button><button class="btn sm" data-act="print">인쇄</button><button class="btn primary sm" data-act="add">+ 직원 추가</button></div></div>
+      ${list.length ? `<div class="scroll"><table><thead><tr>${EMP_HEAD}</tr></thead><tbody>${empRows(list)}</tbody>
+        <tfoot><tr><td colspan="3">합계</td><td class="num">${won(t.base)}</td><td class="num">${won(t.juhu)}</td><td class="num">${won(t.ot)}</td><td class="num">${won(t.adj)}</td><td class="num">${won(t.total)}</td></tr></tfoot></table></div>
+        <p class="hint">이름을 누르면 아래에서 근무시간을 입력합니다.${others ? ` 이번 달 재직 기간이 아닌 직원 ${others}명은 숨겨져 있습니다.` : ''}</p>`
+      : `<div class="empty"><p>이번 달 ${esc(store.name)}에 등록된 직원이 없습니다.</p>
+         <div class="row"><button class="btn primary" data-act="add">+ 직원 추가</button>${state.employees.length ? '' : '<button class="btn" data-act="demo">예시로 채워보기</button>'}</div></div>`}
+    </section>`;
+}
+
+function renderEditor() {
+  const el = $('#editor'); if (!el) return;
+  const e = state.employees.find(x => x.id === ui.sel);
+  if (!e) { el.hidden = true; return; }
+  el.hidden = false;
+  const S = state.settings, full = e.type === 'full';
+  const sub = full ? `월 ${won(e.monthly || 0)}${e.probEnd ? ` · 수습 ~${e.probEnd} (${e.probRate ?? 90}%)` : ''}` : `시급 ${won(e.hourly || 0)}`;
+  const order = [0, 1, 2, 3, 4, 5, 6].map(i => (S.weekStart + i) % 7);
+  el.innerHTML = `
+    <div class="ed-head"><h2>${esc(e.name)}</h2><span class="badge${full ? ' full' : ''}">${full ? '정직원' : '알바'}</span><span class="muted small">${sub}${e.hire ? ` · 입사 ${e.hire}` : ''}${e.leave ? ` · 퇴사 ${e.leave}` : ''}</span>
+      <div class="row no-print"><button class="btn sm" data-act="edit">정보 수정</button><button class="btn sm danger" data-act="del">삭제</button></div></div>
+    ${full
+      ? `<p class="hint">날짜 칸에 그날의 <b>추가근무 시간</b>만 입력하세요 (예: 2, 1.5). 기본급은 재직·수습 날짜로 자동 일할계산됩니다.</p>`
+      : `<p class="hint">날짜 칸에 그날 <b>일한 시간</b>을 입력하세요. 숫자(5, 4.5) 또는 시각(10-15:30)으로 넣으면 됩니다. 휴게시간은 빼고 입력하세요.</p>
+         <details class="no-print" style="margin-bottom:10px"><summary class="small" style="cursor:pointer">요일별 고정 근무로 한 번에 채우기</summary>
+           <div style="margin-top:8px"><div class="pattern">${order.map(d => `<label>${DOW[d]}<input data-pat="${d}" inputmode="decimal" placeholder="0" value="${esc((e.pattern || {})[d] || '')}"></label>`).join('')}</div>
+           <div class="row" style="margin-top:8px"><button class="btn sm" data-act="fill">${ui.m}월에 채우기</button><button class="btn sm danger" data-act="clear">${ui.m}월 입력 비우기</button><span class="muted small">재직 기간 안의 날짜만 채웁니다.</span></div></div></details>`}
+    <div class="scroll"><table class="cal"><thead><tr>${order.map(d => `<th>${DOW[d]}</th>`).join('')}<th>${full ? '주 추가근무' : '주 합계'}</th>${full ? '' : '<th>주휴</th>'}</tr></thead><tbody id="calBody"></tbody></table></div>
+    <div class="legend">${full ? '<span><i style="background:var(--prob)"></i>수습 기간</span><span><i style="background:var(--sunken)"></i>재직 기간 아님</span>' : '<span><i style="opacity:.5;background:var(--bg)"></i>흐린 칸 = 앞뒤 달 (해당 달 급여로 계산, 주휴 판단에만 사용)</span>'}</div>
+    <div class="breakdown" id="breakdown"></div>`;
+  renderCal(e, order);
+  renderBreakdown();
+}
+
+function renderCal(e, order) {
+  const H = state.hours[e.id] || {}, full = e.type === 'full', S = state.settings;
+  const first = ymd(ui.y, ui.m, 1), last = ymd(ui.y, ui.m, daysIn(ui.y, ui.m));
+  let k = addDays(first, -((dowOf(first) - S.weekStart + 7) % 7));
+  const rows = [];
+  while (k <= last) {
+    let cells = '';
+    const wkStart = k;
+    for (let i = 0; i < 7; i++, k = addDays(k, 1)) {
+      const inM = k >= first && k <= last, day = +k.slice(8), dw = dowOf(k);
+      if (full && !inM) { cells += '<td class="other"></td>'; continue; }
+      const st = dayStatus(e, k), v = H[k];
+      const cls = [!inM && 'other', full && st === 'prob' && 'prob', full && st === 'out' && 'out', dw === 0 && 'sun'].filter(Boolean).join(' ');
+      cells += `<td class="${cls}"><div class="d"><span>${inM ? day : `${+k.slice(5, 7)}/${day}`}</span>${full && st === 'prob' ? '<span>수습</span>' : ''}</div>
+        <input data-day="${k}" inputmode="decimal" aria-label="${k}" value="${v ? r1(v) : ''}" class="${v ? 'has' : ''}" ${full && st === 'out' ? 'disabled' : ''}></td>`;
+    }
+    const wkEnd = addDays(wkStart, 6);
+    rows.push(`<tr>${cells}<td class="wk" data-wk="${wkStart}"></td>${full ? '' : `<td class="wk" data-jh="${wkEnd}"></td>`}</tr>`);
+  }
+  $('#calBody').innerHTML = rows.join('');
+  updateWeeks(e);
+}
+
+function updateWeeks(e) {
+  const H = state.hours[e.id] || {}, full = e.type === 'full';
+  const last = ymd(ui.y, ui.m, daysIn(ui.y, ui.m)), first = ymd(ui.y, ui.m, 1);
+  const c = full ? null : calcPart(e, ui.y, ui.m);
+  document.querySelectorAll('#calBody [data-wk]').forEach(td => {
+    let s = 0;
+    for (let i = 0; i < 7; i++) { const k = addDays(td.dataset.wk, i); if (!full || (k >= first && k <= last)) s += +H[k] || 0; }
+    td.textContent = s ? hrs(s) : '–';
+  });
+  if (full) return;
+  const ex = state.excl[e.id] || {};
+  document.querySelectorAll('#calBody [data-jh]').forEach(td => {
+    const end = td.dataset.jh, w = c.weeks.find(x => x.end === end);
+    if (end > last) { td.innerHTML = '<span class="muted small">다음 달 정산</span>'; return; }
+    if (end < first) { td.innerHTML = '<span class="muted small">지난 달 정산</span>'; return; }
+    const box = `<label class="small muted no-print" style="display:inline-flex;align-items:center;gap:4px;margin-top:2px;cursor:pointer"><input type="checkbox" data-excl="${end}" ${ex[end] ? 'checked' : ''}>제외</label>`;
+    td.innerHTML = (w.pay ? `<span class="juhu-ok">${won(w.pay)}</span><div class="small muted">${r1(w.jh)}시간분</div>` : `<span class="muted small">${w.note}</span>`) + box;
+  });
+}
+
+function renderBreakdown() {
+  const el = $('#breakdown'); if (!el) return;
+  const e = state.employees.find(x => x.id === ui.sel); if (!e) return;
+  const c = calc(e), S = state.settings, mk = `${ui.y}-${pad(ui.m)}`;
+  const adjBox = `<div class="adj no-print"><span class="small muted">기타 수당(+)/공제(−)</span><input data-adj inputmode="numeric" value="${c.adj || ''}" placeholder="0"></div>`;
+  let left, right;
+  if (c.type === 'part') {
+    const paid = c.weeks.filter(w => w.pay);
+    left = `<div class="calc"><h3>${ui.m}월 급여 계산</h3>
+      <div class="line"><div>기본급<div class="how">${hrs(c.hours)} × ${won(c.rate)}</div></div><b class="num">${won(c.base)}</b></div>
+      <div class="line"><div>주휴수당<div class="how">${paid.length}주 지급 · 주 15시간 이상</div></div><b class="num">${won(c.juhu)}</b></div>
+      ${c.adj ? `<div class="line"><div>기타 수당/공제</div><b class="num">${won(c.adj)}</b></div>` : ''}
+      <div class="line total"><span>지급 합계</span><span class="num">${won(c.total)}</span></div>${adjBox}
+      ${c.warns.map(w => `<p class="warn">${w}</p>`).join('')}</div>`;
+    right = `<div class="calc"><h3>주휴수당 주별 내역</h3>
+      ${c.weeks.map(w => `<div class="line"><div>${w.start.slice(5).replace('-', '/')} ~ ${w.end.slice(5).replace('-', '/')}<div class="how">근무 ${hrs(w.hours)}${w.pay ? ` → ${hrs(Math.min(w.hours, 40))} ÷ 40 × 8 = ${r1(w.jh)}시간` : ` · ${w.note}`}</div></div><b class="num">${w.pay ? won(w.pay) : '0원'}</b></div>`).join('') || '<p class="muted small">이번 달에 끝나는 주가 없습니다.</p>'}
+      <p class="hint" style="margin-top:8px">주 ${DOW[(S.weekStart + 6) % 7]}요일이 속한 달에 그 주 주휴수당을 지급합니다. 40시간 이상은 8시간분이 최대입니다. 결근 등으로 지급하지 않을 주는 달력 오른쪽 "제외"를 체크하세요.</p></div>`;
+  } else {
+    left = `<div class="calc"><h3>${ui.m}월 기본급 일할계산 (${c.D}일 기준)</h3>
+      <div class="line"><div>1일 급여<div class="how">${won(c.M)} ÷ ${c.D}일</div></div><span class="num">${won(c.daily)}</span></div>
+      <div class="line"><div>정상 근무 ${c.nDays}일<div class="how">${won(c.daily)} × ${c.nDays}일</div></div><b class="num">${won(c.baseN)}</b></div>
+      <div class="line"><div>수습 ${c.pDays}일<div class="how">${won(c.daily)} × ${Math.round(c.p * 100)}% × ${c.pDays}일</div></div><b class="num">${won(c.baseP)}</b></div>
+      ${c.D - c.nDays - c.pDays ? `<div class="line"><div class="muted">재직 기간 아님 ${c.D - c.nDays - c.pDays}일</div><span class="num muted">0원</span></div>` : ''}
+      <div class="line"><div>기본급 소계</div><b class="num">${won(c.base)}</b></div>${c.warns.map(w => `<p class="warn">${w}</p>`).join('')}</div>`;
+    right = `<div class="calc"><h3>추가근무 수당 (${S.otRate}배)</h3>
+      <div class="line"><div>통상시급<div class="how">${won(c.M)} ÷ ${S.stdHours}시간</div></div><span class="num">${won(c.std)}</span></div>
+      <div class="line"><div>추가근무 ${hrs(c.otHours - c.otHp)}<div class="how">× ${won(c.std)} × ${S.otRate}</div></div><span class="num">${won((c.otHours - c.otHp) * c.std * S.otRate)}</span></div>
+      ${c.otHp ? `<div class="line"><div>수습 중 추가근무 ${hrs(c.otHp)}<div class="how">× ${won(c.std)} × ${Math.round(c.p * 100)}% × ${S.otRate}</div></div><span class="num">${won(c.otHp * c.std * c.p * S.otRate)}</span></div>` : ''}
+      <div class="line"><div>추가근무 수당</div><b class="num">${won(c.ot)}</b></div>
+      ${c.adj ? `<div class="line"><div>기타 수당/공제</div><b class="num">${won(c.adj)}</b></div>` : ''}
+      <div class="line total"><span>지급 합계</span><span class="num">${won(c.total)}</span></div>${adjBox}</div>`;
+  }
+  el.innerHTML = left + right;
+}
+
+function renderAll() {
+  const per = state.stores.map(s => ({ s, t: sumOf(staffOf(s.id)) }));
+  const g = sumOf(state.stores.flatMap(s => staffOf(s.id)));
+  const all = state.stores.flatMap(s => staffOf(s.id));
+  view.innerHTML = `
+    <section class="tiles">
+      ${tile(`${ui.y}년 ${ui.m}월 전체 인건비`, won(g.total), `${g.partN + g.fullN}명 · ${state.stores.length}개 매장`, true)}
+      ${per.map(({ s, t }) => tile(esc(s.name), won(t.total), `${g.total ? Math.round(t.total / g.total * 100) : 0}% · ${t.partN + t.fullN}명`)).join('')}
+    </section>
+    <section class="panel"><div class="panel-head"><h2>매장별 요약</h2>
+      <div class="row no-print"><button class="btn sm" data-act="csv">엑셀(CSV) 저장</button><button class="btn sm" data-act="print">인쇄</button></div></div>
+      <div class="scroll"><table><thead><tr><th>매장</th><th class="num">알바</th><th class="num">알바 급여</th><th class="num">└ 주휴수당</th><th class="num">정직원</th><th class="num">정직원 급여</th><th class="num">└ 추가근무</th><th class="num">합계</th></tr></thead>
+      <tbody>${per.map(({ s, t }) => `<tr><td><b>${esc(s.name)}</b></td><td class="num">${t.partN}명</td><td class="num">${won(t.part)}</td><td class="num muted">${won(t.juhu)}</td><td class="num">${t.fullN}명</td><td class="num">${won(t.full)}</td><td class="num muted">${won(t.ot)}</td><td class="num"><b>${won(t.total)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>전체</td><td class="num">${g.partN}명</td><td class="num">${won(g.part)}</td><td class="num">${won(g.juhu)}</td><td class="num">${g.fullN}명</td><td class="num">${won(g.full)}</td><td class="num">${won(g.ot)}</td><td class="num">${won(g.total)}</td></tr></tfoot></table></div></section>
+    <section class="panel"><div class="panel-head"><h2>전체 직원</h2></div>
+      ${all.length ? `<div class="scroll"><table><thead><tr><th>매장</th>${EMP_HEAD}</tr></thead><tbody>${empRows(all, true)}</tbody>
+      <tfoot><tr><td colspan="4">합계</td><td class="num">${won(g.base)}</td><td class="num">${won(g.juhu)}</td><td class="num">${won(g.ot)}</td><td class="num">${won(g.adj)}</td><td class="num">${won(g.total)}</td></tr></tfoot></table></div>`
+      : '<p class="empty">아직 직원이 없습니다. 매장 탭에서 직원을 추가하세요.</p>'}</section>`;
+}
+
+function renderSettings() {
+  const S = state.settings;
+  view.innerHTML = `<div class="settings">
+    <section class="panel"><div class="panel-head"><h2>매장 이름</h2></div>
+      <div class="grid2">${state.stores.map(s => `<label class="field"><span>${s.id === 's1' ? '첫 번째' : '두 번째'} 매장</span><input data-store="${s.id}" value="${esc(s.name)}"></label>`).join('')}</div></section>
+    <section class="panel"><div class="panel-head"><h2>계산 기준</h2></div>
+      <div class="grid2">
+        <label class="field"><span>최저시급 (원) · 2026년 10,320원</span><input data-set="minWage" type="number" value="${S.minWage}"></label>
+        <label class="field"><span>월 소정근로시간 (통상시급 계산) · 보통 209</span><input data-set="stdHours" type="number" value="${S.stdHours}"></label>
+        <label class="field"><span>추가근무 배율</span><input data-set="otRate" type="number" step="0.1" value="${S.otRate}"></label>
+        <label class="field"><span>한 주의 시작 요일 (주휴 계산)</span><select data-set="weekStart">${DOW.map((d, i) => `<option value="${i}" ${i === S.weekStart ? 'selected' : ''}>${d}요일 ~ ${DOW[(i + 6) % 7]}요일</option>`).join('')}</select></label>
+      </div></section>
+    <section class="panel"><div class="panel-head"><h2>데이터 백업</h2></div>
+      <p class="notice" style="margin-bottom:10px">모든 데이터는 이 브라우저 안에만 저장됩니다. 다른 컴퓨터로 옮기거나 브라우저 기록을 지우기 전에 백업 파일을 저장하세요.</p>
+      <div class="row"><button class="btn primary" data-act="export">백업 파일 저장</button><label class="btn">백업 파일 불러오기<input type="file" accept="application/json,.json" id="importFile" hidden></label><button class="btn danger" data-act="reset">전체 초기화</button></div></section>
+    <section class="panel"><div class="panel-head"><h2>계산 방식</h2></div>
+      <ul class="notice">
+        <li><b>알바 기본급</b> = 그 달에 입력한 근무시간 합계 × 시급</li>
+        <li><b>주휴수당</b> = 한 주(${DOW[S.weekStart]}~${DOW[(S.weekStart + 6) % 7]}) 근무가 15시간 이상이면 (주 근무시간 ÷ 40 × 8) × 시급, 최대 8시간분. 주 마지막 날이 속한 달에 지급하며, 달을 걸친 주는 앞 달 근무시간도 합산합니다. 퇴사로 다음 주 근무가 없으면 그 주는 지급하지 않습니다.</li>
+        <li><b>정직원 기본급</b> = 월급 ÷ 그 달 일수(28·29·30·31일) × 재직 일수. 수습일은 여기에 수습 지급률(기본 90%)을 곱합니다. 한 달을 모두 근무하면 월급 전액입니다.</li>
+        <li><b>추가근무 수당</b> = 추가근무 시간 × 통상시급(월급 ÷ ${S.stdHours}) × ${S.otRate}. 수습 기간의 추가근무는 수습 지급률이 적용된 시급으로 계산합니다.</li>
+        <li>지급 합계는 세전 금액이며 4대보험·소득세 공제는 포함하지 않습니다. 원 단위 미만은 반올림합니다.</li>
+      </ul></section></div>`;
+}
+
+// ---------- 직원 추가/수정 ----------
+const dlg = $('#empDlg'), form = $('#empForm');
+let editing = null;
+function syncType() {
+  const t = form.type.value;
+  form.querySelectorAll('[data-for]').forEach(x => x.hidden = x.dataset.for !== t);
+}
+function openEmp(e) {
+  editing = e || null;
+  $('#empDlgTitle').textContent = e ? '직원 정보 수정' : '직원 추가';
+  form.store.innerHTML = state.stores.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  form.reset();
+  const v = e || { type: 'part', store: state.stores.some(s => s.id === ui.tab) ? ui.tab : 's1', hourly: state.settings.minWage, probRate: 90 };
+  form.type.value = v.type; form.name.value = v.name || ''; form.store.value = v.store;
+  form.hourly.value = v.hourly ?? ''; form.monthly.value = v.monthly ?? ''; form.probRate.value = v.probRate ?? 90;
+  form.hire.value = v.hire || ''; form.leave.value = v.leave || ''; form.probEnd.value = v.probEnd || '';
+  $('#empErr').hidden = true;
+  syncType(); dlg.showModal(); form.name.focus();
+}
+form.addEventListener('change', ev => { if (ev.target.name === 'type') syncType(); });
+$('#prob3').addEventListener('click', () => {
+  if (!form.hire.value) { $('#empErr').textContent = '입사일을 먼저 입력하세요.'; $('#empErr').hidden = false; return; }
+  form.probEnd.value = addMonths(form.hire.value, 3);
+});
+$('#empCancel').addEventListener('click', () => dlg.close());
+form.addEventListener('submit', ev => {
+  ev.preventDefault();
+  const t = form.type.value, err = $('#empErr');
+  const fail = m => { err.textContent = m; err.hidden = false; };
+  if (!form.name.value.trim()) return fail('이름을 입력하세요.');
+  if (t === 'part' && !(+form.hourly.value > 0)) return fail('시급을 입력하세요.');
+  if (t === 'full' && !(+form.monthly.value > 0)) return fail('월 기본급을 입력하세요.');
+  if (form.hire.value && form.leave.value && form.leave.value < form.hire.value) return fail('퇴사일이 입사일보다 빠릅니다.');
+  const e = editing || { id: uid() };
+  Object.assign(e, {
+    type: t, name: form.name.value.trim(), store: form.store.value,
+    hourly: t === 'part' ? +form.hourly.value : undefined,
+    monthly: t === 'full' ? +form.monthly.value : undefined,
+    probRate: t === 'full' ? (form.probRate.value === '' ? 90 : +form.probRate.value) : undefined,
+    probEnd: t === 'full' ? form.probEnd.value || '' : '',
+    hire: form.hire.value || '', leave: form.leave.value || ''
+  });
+  if (!editing) state.employees.push(e);
+  save(); dlg.close();
+  ui.tab = e.store; ui.sel = e.id; saveUi(); render();
+});
+
+// ---------- 입력 처리 ----------
+function parseHours(s) {
+  s = String(s).trim().replace(/\s/g, '');
+  if (!s) return 0;
+  const m = s.match(/^(\d{1,2})(?::(\d{2}))?[-~](\d{1,2})(?::(\d{2}))?$/);
+  if (m) {
+    const a = +m[1] * 60 + +(m[2] || 0); let b = +m[3] * 60 + +(m[4] || 0);
+    if (b <= a) b += 24 * 60;
+    return r1((b - a) / 60);
+  }
+  const n = Number(s.replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 && n <= 24 ? n : NaN;
+}
+function afterEdit() { save(); renderSummary(); const e = state.employees.find(x => x.id === ui.sel); if (e) updateWeeks(e); renderBreakdown(); }
+
+document.addEventListener('change', ev => {
+  const t = ev.target;
+  if (t.dataset.day) {
+    const v = parseHours(t.value), H = (state.hours[ui.sel] ||= {});
+    if (Number.isNaN(v)) { t.classList.add('bad'); return; }
+    t.classList.remove('bad');
+    if (v) H[t.dataset.day] = v; else delete H[t.dataset.day];
+    t.value = v ? r1(v) : ''; t.classList.toggle('has', !!v);
+    afterEdit();
+  } else if (t.dataset.excl) {
+    const x = (state.excl[ui.sel] ||= {});
+    if (t.checked) x[t.dataset.excl] = true; else delete x[t.dataset.excl];
+    afterEdit();
+  } else if ('adj' in t.dataset) {
+    const a = (state.adj[ui.sel] ||= {}), k = `${ui.y}-${pad(ui.m)}`, v = Math.round(Number(t.value.replace(/[,\s원]/g, '')) || 0);
+    if (v) a[k] = v; else delete a[k];
+    afterEdit();
+  } else if (t.dataset.pat !== undefined) {
+    const e = state.employees.find(x => x.id === ui.sel), v = parseHours(t.value);
+    (e.pattern ||= {})[t.dataset.pat] = Number.isNaN(v) ? 0 : v; t.value = v || ''; save();
+  } else if (t.dataset.store) {
+    const s = state.stores.find(x => x.id === t.dataset.store); s.name = t.value.trim() || s.name; save(); renderTabs();
+  } else if (t.dataset.set) {
+    const v = Number(t.value); if (Number.isFinite(v) && v >= 0) { state.settings[t.dataset.set] = v; save(); }
+  } else if (t.id === 'importFile' && t.files[0]) {
+    t.files[0].text().then(txt => {
+      try {
+        const s = JSON.parse(txt); if (!Array.isArray(s.employees)) throw 0;
+        if (!confirm('현재 데이터를 백업 파일 내용으로 바꿉니다. 계속할까요?')) return;
+        const f = fresh(); state = { ...f, ...s, settings: { ...f.settings, ...s.settings } }; save(); render(); alert('불러왔습니다.');
+      } catch (e) { alert('올바른 백업 파일이 아닙니다.'); }
+    });
+  }
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Enter' && ev.target.dataset?.day) {
+    ev.preventDefault();
+    const all = [...document.querySelectorAll('#calBody input[data-day]:not(:disabled)')], i = all.indexOf(ev.target);
+    ev.target.blur(); (all[i + 1] || ev.target).focus();
+  } else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.dataset?.emp) { ev.preventDefault(); ev.target.click(); }
+});
+document.addEventListener('focusin', ev => { if (ev.target.dataset?.day) ev.target.select(); });
+
+document.addEventListener('click', ev => {
+  const tab = ev.target.closest('[data-tab]');
+  if (tab) { ui.tab = tab.dataset.tab; ui.sel = null; saveUi(); render(); return; }
+  const row = ev.target.closest('tr[data-emp]');
+  if (row) {
+    const e = state.employees.find(x => x.id === row.dataset.emp);
+    if (ui.tab !== e.store) { ui.tab = e.store; ui.sel = e.id; saveUi(); render(); }
+    else { ui.sel = e.id; saveUi(); renderSummary(); renderEditor(); }
+    $('#editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  const act = ev.target.closest('[data-act]')?.dataset.act; if (!act) return;
+  const e = state.employees.find(x => x.id === ui.sel);
+  if (act === 'add') openEmp();
+  else if (act === 'edit') openEmp(e);
+  else if (act === 'del' && confirm(`${e.name} 님과 모든 근무 기록을 삭제할까요?`)) {
+    state.employees = state.employees.filter(x => x !== e);
+    delete state.hours[e.id]; delete state.excl[e.id]; delete state.adj[e.id];
+    ui.sel = null; save(); render();
+  } else if (act === 'fill' || act === 'clear') {
+    const H = (state.hours[e.id] ||= {}), P = e.pattern || {};
+    if (act === 'clear' && !confirm(`${ui.m}월 입력을 모두 지울까요?`)) return;
+    for (let d = 1; d <= daysIn(ui.y, ui.m); d++) {
+      const k = ymd(ui.y, ui.m, d);
+      if (act === 'clear') { delete H[k]; continue; }
+      if (dayStatus(e, k) === 'out') continue;
+      const v = +P[dowOf(k)] || 0; if (v) H[k] = v; else delete H[k];
+    }
+    save(); renderSummary(); renderEditor();
+  } else if (act === 'csv') downloadCsv();
+  else if (act === 'print') window.print();
+  else if (act === 'export') download(`급여계산_백업_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(state, null, 2), 'application/json');
+  else if (act === 'reset' && confirm('모든 직원과 근무 기록을 지웁니다. 먼저 백업하셨나요?')) { state = fresh(); save(); ui.tab = 's1'; ui.sel = null; render(); }
+  else if (act === 'demo') demo();
+});
+
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function downloadCsv() {
+  const stores = ui.tab === 'all' ? state.stores : state.stores.filter(s => s.id === ui.tab);
+  const q = v => `"${String(v).replace(/"/g, '""')}"`;
+  const rows = [['매장', '이름', '구분', '근무시간', '근무일수', '수습일수', '기본급', '주휴수당', '추가근무시간', '추가근무수당', '기타', '지급합계']];
+  for (const s of stores) for (const e of staffOf(s.id)) {
+    const c = calc(e);
+    rows.push([s.name, e.name, e.type === 'full' ? '정직원' : '알바', e.type === 'full' ? '' : r1(c.hours), e.type === 'full' ? c.nDays + c.pDays : c.days, e.type === 'full' ? c.pDays : '',
+      c.base, c.juhu, r1(c.otHours), c.ot, c.adj, c.total]);
+  }
+  const tot = rows.slice(1).reduce((t, r) => t.map((v, i) => i >= 6 && i !== 8 ? v + r[i] : v), ['합계', '', '', '', '', '', 0, 0, '', 0, 0, 0]);
+  rows.push(tot);
+  const name = ui.tab === 'all' ? '전체' : stores[0].name;
+  download(`급여_${name}_${ui.y}-${pad(ui.m)}.csv`, '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
+}
+
+function demo() {
+  const y = ui.y, m = ui.m, mk = (dy, dm = 0) => ymd(y, m + dm, dy);
+  const E = [
+    { id: uid(), type: 'part', name: '김민지', store: 's1', hourly: 10320, hire: mk(1, -6), pattern: { 1: 5, 3: 5, 5: 5 } },
+    { id: uid(), type: 'part', name: '이서준', store: 's1', hourly: 10500, hire: mk(1, -2), pattern: { 6: 6, 0: 6 } },
+    { id: uid(), type: 'full', name: '박지훈', store: 's1', monthly: 2500000, probRate: 90, hire: mk(16, -2), probEnd: addMonths(mk(16, -2), 3) },
+    { id: uid(), type: 'part', name: '최유나', store: 's2', hourly: 10320, hire: mk(1, -3), pattern: { 1: 4, 2: 4, 3: 4, 4: 4, 5: 4 } },
+    { id: uid(), type: 'full', name: '정하늘', store: 's2', monthly: 2800000, probRate: 90, hire: mk(10), probEnd: addMonths(mk(10), 3) }
+  ];
+  for (const e of E) {
+    state.employees.push(e);
+    const H = (state.hours[e.id] = {});
+    if (e.type === 'part') {
+      for (let d = -6; d <= daysIn(y, m); d++) { const k = mk(d); if (k >= e.hire) { const v = e.pattern[dowOf(k)]; if (v) H[k] = v; } }
+    } else { H[mk(15)] = 2; H[mk(22)] = 1.5; H[mk(27)] = 3; }
+  }
+  save(); ui.tab = 's1'; ui.sel = E[0].id; render();
+}
+
+$('#month').addEventListener('change', ev => { const [y, m] = ev.target.value.split('-').map(Number); if (y && m) { ui.y = y; ui.m = m; render(); } });
+const shift = n => { const d = new Date(ui.y, ui.m - 1 + n, 1); ui.y = d.getFullYear(); ui.m = d.getMonth() + 1; render(); };
+$('#prevM').addEventListener('click', () => shift(-1));
+$('#nextM').addEventListener('click', () => shift(1));
+
+render();
+</script>
+</body>
+</html>
