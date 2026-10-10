@@ -103,6 +103,11 @@ tbody tr.sel { background: var(--accent-soft); }
 .ed-head h2 { font-size: 19px; }
 .ed-head .row { margin-left: auto; }
 .hint { font-size: 13px; color: var(--muted); margin: 6px 0 10px; }
+.otbox { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px; }
+.otbox h3 { font-size: 15px; margin-bottom: 8px; }
+.otgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.otbox .field input { background: var(--surface); font-size: 16px; font-weight: 700; }
+.cal input::placeholder { color: var(--muted); opacity: .45; font-size: 12px; font-weight: 400; }
 .pattern { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; max-width: 520px; }
 .pattern label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); text-align: center; }
 .pattern input { width: 100%; padding: 6px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); text-align: center; }
@@ -312,6 +317,7 @@ function fresh() {
     hours: {},   // hours[직원id][날짜] = 알바: 근무시간, 정직원: 추가근무시간
     excl: {},    // excl[직원id][주 마지막 날짜] = true → 그 주 주휴 제외
     adj: {},     // adj[직원id]['YYYY-MM'] = 기타 수당(+)/공제(-)
+    otm: {},     // otm[직원id]['YYYY-MM'] = { work, prob } 정직원 추가근무 월 합계(날짜 없이 입력)
     holidays: { added: {}, removed: {} },  // 기본 공휴일 목록에 더하거나 뺀 날짜
     settings: { minWage: 10320, stdHours: 209, weekStart: 1, otRate: 1.5, holRate: 1.5, payDay: 10 }
   };
@@ -334,7 +340,7 @@ function save() {
 const cloud = { db: null, dir: null, dl: null, last: {}, writing: false, again: false, timer: 0 };
 const setStatus = t => { const el = document.getElementById('saveStatus'); if (el) el.textContent = t; };
 function toDocs(st) {
-  const docs = { core: { v: 1, stores: st.stores, employees: st.employees, excl: st.excl, adj: st.adj, holidays: st.holidays, settings: st.settings } };
+  const docs = { core: { v: 1, stores: st.stores, employees: st.employees, excl: st.excl, adj: st.adj, otm: st.otm, holidays: st.holidays, settings: st.settings } };
   for (const [id, H] of Object.entries(st.hours)) for (const [k, v] of Object.entries(H)) {
     const y = 'h-' + k.slice(0, 4); ((docs[y] ||= {})[id] ||= {})[k] = v;
   }
@@ -342,7 +348,7 @@ function toDocs(st) {
 }
 function fromDocs(docs) {
   const f = fresh(), c = docs.core;
-  const st = { ...f, stores: c.stores || f.stores, employees: c.employees || [], excl: c.excl || {}, adj: c.adj || {}, holidays: c.holidays || f.holidays, settings: { ...f.settings, ...c.settings }, hours: {} };
+  const st = { ...f, stores: c.stores || f.stores, employees: c.employees || [], excl: c.excl || {}, adj: c.adj || {}, otm: c.otm || {}, holidays: c.holidays || f.holidays, settings: { ...f.settings, ...c.settings }, hours: {} };
   for (const [name, body] of Object.entries(docs)) if (name.startsWith('h-'))
     for (const [id, H] of Object.entries(body)) Object.assign((st.hours[id] ||= {}), H);
   return st;
@@ -454,6 +460,11 @@ function calcFull(emp, y, m) {
     const h = st === 'out' ? 0 : (+H[k] || 0);
     if (h) { otH += h; if (st === 'prob') otHp += h; otPay += h * std * (st === 'prob' ? p : 1) * S.otRate; }
   }
+  // 관리자가 날짜 없이 직접 넣은 월 합계 시간
+  const om = (state.otm[emp.id] || {})[`${y}-${pad(m)}`] || {};
+  const mw = nDays ? +om.work || 0 : 0, mp = pDays ? +om.prob || 0 : 0;
+  const calH = otH;
+  otH += mw + mp; otHp += mp; otPay += mw * std * S.otRate + mp * std * p * S.otRate;
   const baseN = Math.round(daily * nDays), baseP = Math.round(daily * p * pDays);
   const ot = Math.round(otPay);
   const adj = +((state.adj[emp.id] || {})[`${y}-${pad(m)}`]) || 0;
@@ -463,7 +474,7 @@ function calcFull(emp, y, m) {
     warns.push(`수습 시급 ${won(std * p)}이 최저임금보다 낮습니다. 최저임금 90% 감액은 1년 이상 계약·단순노무직 아님·수습 3개월 이내일 때만 가능합니다.`);
     if (emp.hire && emp.probEnd && emp.probEnd > addMonths(emp.hire, 3)) warns.push('수습 종료일이 입사 후 3개월을 넘습니다. 3개월 이후에는 최저임금 감액이 허용되지 않습니다.');
   }
-  return { type: 'full', D, M, p, daily, std, nDays, pDays, rng, baseN, baseP, base: baseN + baseP, otHours: otH, otHp, ot, juhu: 0, hours: 0, adj, total: baseN + baseP + ot + adj, warns };
+  return { type: 'full', D, M, p, daily, std, nDays, pDays, rng, calH, mw, mp, baseN, baseP, base: baseN + baseP, otHours: otH, otHp, ot, juhu: 0, hours: 0, adj, total: baseN + baseP + ot + adj, warns };
 }
 function addMonths(k, n) { const [y, m, d] = k.split('-').map(Number); return ymd(y, m + n, d - 1); }
 function dayStatus(emp, k) {
@@ -569,7 +580,15 @@ function renderEditor() {
     <div class="ed-head"><h2>${esc(e.name)}</h2><span class="badge${full ? ' full' : ''}">${full ? '정직원' : '알바'}</span><span class="muted small">${sub}${e.hire ? ` · 입사 ${e.hire}` : ''}${e.leave ? ` · 퇴사 ${e.leave}` : ''}</span>
       <div class="row no-print"><button class="btn sm" data-act="edit">정보 수정</button><button class="btn sm danger" data-act="del">삭제</button></div></div>
     ${full
-      ? `<p class="hint">날짜 칸에 그날의 <b>추가근무 시간</b>만 입력하세요 (예: 2, 1.5). 기본급은 재직·수습 날짜로 자동 일할계산됩니다.</p>`
+      ? (() => { const c = calcFull(e, ui.y, ui.m), om = (state.otm[e.id] || {})[`${ui.y}-${pad(ui.m)}`] || {}; return `
+        <div class="otbox no-print">
+          <h3>${ui.m}월 추가근무 시간 입력</h3>
+          <div class="otgrid">
+            ${c.nDays ? `<label class="field"><span>추가근무 합계 (시간)${c.pDays ? ' · 수습 끝난 뒤' : ''}</span><input data-otm="work" inputmode="decimal" placeholder="예: 12 또는 12:30" value="${om.work ? r1(om.work) : ''}"></label>` : ''}
+            ${c.pDays ? `<label class="field"><span>추가근무 합계 (시간) · 수습 기간 중 ${Math.round(c.p * 100)}%</span><input data-otm="prob" inputmode="decimal" placeholder="예: 5" value="${om.prob ? r1(om.prob) : ''}"></label>` : ''}
+          </div>
+          <p class="hint" style="margin:6px 0 0">이번 달 추가근무 시간을 합쳐서 넣으면 됩니다. 날짜별로 기록하고 싶으면 아래 달력 칸에 넣어도 되고, 둘 다 넣으면 더해서 계산합니다.${c.calH ? ` 현재 달력 입력: ${hrs(c.calH)}` : ''}</p>
+        </div>`; })()
       : `<p class="hint">날짜 칸에 그날 <b>일한 시간</b>을 입력하세요. 숫자(5, 4.5) 또는 시각(10-15:30)으로 넣으면 됩니다. 휴게시간은 빼고 입력하세요.</p>
          <details class="no-print" style="margin-bottom:10px"><summary class="small" style="cursor:pointer">요일별 고정 근무로 한 번에 채우기</summary>
            <div style="margin-top:8px"><div class="pattern">${order.map(d => `<label>${DOW[d]}<input data-pat="${d}" inputmode="decimal" placeholder="0" value="${esc((e.pattern || {})[d] || '')}"></label>`).join('')}</div>
@@ -597,7 +616,7 @@ function renderCal(e, order) {
       const cls = [!inM && 'other', full && st === 'prob' && 'prob', full && st === 'out' && 'out', (dw === 0 || hn) && 'sun', prem && 'hol'].filter(Boolean).join(' ');
       const tag = hn ? `<span class="hn" title="${esc(hn)}${prem ? ` · ${S.holRate}배` : dw === 0 || dw === 6 ? ' · 주말이라 가산 없음' : ''}">${prem ? '×' + S.holRate : esc(hn.replace(/\(.*\)/, ''))}</span>` : full && st === 'prob' ? '<span>수습</span>' : '';
       cells += `<td class="${cls}"${hn ? ` title="${esc(hn)}"` : ''}><div class="d"><span>${inM ? day : `${+k.slice(5, 7)}/${day}`}</span>${tag}</div>
-        <input data-day="${k}" inputmode="decimal" aria-label="${k}" value="${v ? r1(v) : ''}" class="${v ? 'has' : ''}" ${full && st === 'out' ? 'disabled' : ''}></td>`;
+        <input data-day="${k}" inputmode="decimal" aria-label="${k}"${full ? ' placeholder="+시간"' : ''} value="${v ? r1(v) : ''}" class="${v ? 'has' : ''}" ${full && st === 'out' ? 'disabled' : ''}></td>`;
     }
     const wkEnd = addDays(wkStart, 6);
     rows.push(`<tr>${cells}<td class="wk" data-wk="${wkStart}"></td>${full ? '' : `<td class="wk" data-jh="${wkEnd}"></td>`}</tr>`);
@@ -828,7 +847,7 @@ let toastT = 0;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
 
 // ---------- 입력 처리 ----------
-function parseHours(s) {
+function parseHours(s, max = 24) {
   s = String(s).trim().replace(/\s/g, '');
   if (!s) return 0;
   const m = s.match(/^(\d{1,2})(?::(\d{2}))?[-~](\d{1,2})(?::(\d{2}))?$/);
@@ -837,8 +856,9 @@ function parseHours(s) {
     if (b <= a) b += 24 * 60;
     return r1((b - a) / 60);
   }
-  const n = Number(s.replace(',', '.'));
-  return Number.isFinite(n) && n >= 0 && n <= 24 ? n : NaN;
+  const hm = s.match(/^(\d{1,3}):(\d{2})$/);  // 1:30 → 1.5시간
+  const n = hm ? +hm[1] + +hm[2] / 60 : Number(s.replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 && n <= max ? r1(n) : NaN;
 }
 function afterEdit() { save(); renderSummary(); const e = state.employees.find(x => x.id === ui.sel); if (e) updateWeeks(e); renderBreakdown(); }
 
@@ -854,6 +874,15 @@ document.addEventListener('change', ev => {
   } else if (t.dataset.excl) {
     const x = (state.excl[ui.sel] ||= {});
     if (t.checked) x[t.dataset.excl] = true; else delete x[t.dataset.excl];
+    afterEdit();
+  } else if (t.dataset.otm) {
+    const v = parseHours(t.value, 400);
+    if (Number.isNaN(v)) { t.classList.add('bad'); toast('시간을 숫자로 입력하세요 (예: 12, 7.5, 3:30).'); return; }
+    t.classList.remove('bad');
+    const k = `${ui.y}-${pad(ui.m)}`, o = ((state.otm[ui.sel] ||= {})[k] ||= {});
+    if (v) o[t.dataset.otm] = v; else delete o[t.dataset.otm];
+    if (!Object.keys(o).length) delete state.otm[ui.sel][k];
+    t.value = v ? r1(v) : '';
     afterEdit();
   } else if ('adj' in t.dataset) {
     const a = (state.adj[ui.sel] ||= {}), k = `${ui.y}-${pad(ui.m)}`, v = Math.round(Number(t.value.replace(/[,\s원]/g, '')) || 0);
@@ -917,7 +946,7 @@ document.addEventListener('click', async ev => {
   else if (act === 'del') {
     if (!await ask(`${e.name} 님과 모든 근무 기록을 삭제할까요?`, '삭제')) return;
     state.employees = state.employees.filter(x => x !== e);
-    delete state.hours[e.id]; delete state.excl[e.id]; delete state.adj[e.id];
+    delete state.hours[e.id]; delete state.excl[e.id]; delete state.adj[e.id]; delete state.otm[e.id];
     ui.sel = null; save(); render();
   } else if (act === 'fill' || act === 'clear') {
     const H = (state.hours[e.id] ||= {}), P = e.pattern || {};
