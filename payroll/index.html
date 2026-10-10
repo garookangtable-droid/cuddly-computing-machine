@@ -54,7 +54,7 @@ button, input, select { font: inherit; color: inherit; }
 .top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 20px; padding-bottom: 14px; border-bottom: 3px solid var(--accent); }
 .brand h1 { font-size: 24px; letter-spacing: -0.01em; }
 .brand p { color: var(--muted); font-size: 13px; }
-.month { display: flex; align-items: center; gap: 6px; }
+.month { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .month input { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-weight: 600; }
 .iconbtn { width: 34px; height: 34px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; cursor: pointer; }
 
@@ -181,6 +181,7 @@ dialog h2 { font-size: 18px; }
       <button class="iconbtn" id="prevM" aria-label="이전 달">‹</button>
       <input type="month" id="month" aria-label="급여 월">
       <button class="iconbtn" id="nextM" aria-label="다음 달">›</button>
+      <span id="payNote" class="muted small"></span>
     </div>
   </header>
   <nav class="tabs" id="tabs" role="tablist"></nav>
@@ -312,7 +313,7 @@ function fresh() {
     excl: {},    // excl[직원id][주 마지막 날짜] = true → 그 주 주휴 제외
     adj: {},     // adj[직원id]['YYYY-MM'] = 기타 수당(+)/공제(-)
     holidays: { added: {}, removed: {} },  // 기본 공휴일 목록에 더하거나 뺀 날짜
-    settings: { minWage: 10320, stdHours: 209, weekStart: 1, otRate: 1.5, holRate: 1.5 }
+    settings: { minWage: 10320, stdHours: 209, weekStart: 1, otRate: 1.5, holRate: 1.5, payDay: 10 }
   };
 }
 let storageOk = true;
@@ -390,8 +391,12 @@ async function initCloud() {
   } catch (e) { setStatus('이 브라우저에 저장'); }
 }
 let state = load();
+// 급여는 다음 달 지급일(기본 10일)에 이체 → 지급일까지는 지난달 급여를 먼저 보여줌
 const now = new Date();
-let ui = { y: now.getFullYear(), m: now.getMonth() + 1, tab: 's1', sel: null };
+const payMonth = new Date(now.getFullYear(), now.getMonth() - (now.getDate() <= (+state.settings.payDay || 10) ? 1 : 0), 1);
+let ui = { y: payMonth.getFullYear(), m: payMonth.getMonth() + 1, tab: 's1', sel: null };
+const payDate = (y, m) => { const d = new Date(y, m, 1); return `${d.getMonth() + 1}월 ${+state.settings.payDay || 10}일 지급`; };
+const md = k => `${+k.slice(5, 7)}/${+k.slice(8)}`;
 try { const u = JSON.parse(localStorage.getItem(KEY + '-ui') || '{}'); if (u.tab) ui.tab = u.tab; if (u.sel) ui.sel = u.sel; } catch (e) {}
 const saveUi = () => { try { localStorage.setItem(KEY + '-ui', JSON.stringify({ tab: ui.tab, sel: ui.sel })); } catch (e) {} };
 
@@ -441,9 +446,11 @@ function calcFull(emp, y, m) {
   const D = daysIn(y, m), M = +emp.monthly || 0;
   const p = (emp.probRate ?? 90) / 100, daily = M / D, std = M / S.stdHours;
   let nDays = 0, pDays = 0, otH = 0, otHp = 0, otPay = 0;
+  const rng = { work: [], prob: [] };
   for (let d = 1; d <= D; d++) {
     const k = ymd(y, m, d), st = dayStatus(emp, k);
     if (st === 'work') nDays++; else if (st === 'prob') pDays++;
+    if (st !== 'out') { const r = rng[st]; if (!r.length) r.push(k, k); else r[1] = k; }
     const h = st === 'out' ? 0 : (+H[k] || 0);
     if (h) { otH += h; if (st === 'prob') otHp += h; otPay += h * std * (st === 'prob' ? p : 1) * S.otRate; }
   }
@@ -456,7 +463,7 @@ function calcFull(emp, y, m) {
     warns.push(`수습 시급 ${won(std * p)}이 최저임금보다 낮습니다. 최저임금 90% 감액은 1년 이상 계약·단순노무직 아님·수습 3개월 이내일 때만 가능합니다.`);
     if (emp.hire && emp.probEnd && emp.probEnd > addMonths(emp.hire, 3)) warns.push('수습 종료일이 입사 후 3개월을 넘습니다. 3개월 이후에는 최저임금 감액이 허용되지 않습니다.');
   }
-  return { type: 'full', D, M, p, daily, std, nDays, pDays, baseN, baseP, base: baseN + baseP, otHours: otH, otHp, ot, juhu: 0, hours: 0, adj, total: baseN + baseP + ot + adj, warns };
+  return { type: 'full', D, M, p, daily, std, nDays, pDays, rng, baseN, baseP, base: baseN + baseP, otHours: otH, otHp, ot, juhu: 0, hours: 0, adj, total: baseN + baseP + ot + adj, warns };
 }
 function addMonths(k, n) { const [y, m, d] = k.split('-').map(Number); return ymd(y, m + n, d - 1); }
 function dayStatus(emp, k) {
@@ -487,6 +494,7 @@ function renderTabs() {
 }
 function render() {
   $('#month').value = `${ui.y}-${pad(ui.m)}`;
+  $('#payNote').textContent = `근무분 → ${payDate(ui.y, ui.m)}`;
   $('#storageWarn').hidden = storageOk;
   renderTabs();
   if (ui.tab === 'all') renderAll();
@@ -534,12 +542,12 @@ function renderSummary() {
   const others = state.employees.filter(e => e.store === ui.tab && !employedIn(e, ui.y, ui.m)).length;
   el.innerHTML = `
     <section class="tiles">
-      ${tile(`${esc(store.name)} ${ui.m}월 인건비`, won(t.total), `${list.length}명`, true)}
+      ${tile(`${esc(store.name)} ${ui.m}월분 인건비`, won(t.total), `${list.length}명 · ${payDate(ui.y, ui.m)}`, true)}
       ${tile('알바 합계', won(t.part), `${t.partN}명 · 주휴 ${won(t.juhu)} · 휴일가산 ${won(t.hol)}`)}
       ${tile('정직원 합계', won(t.full), `${t.fullN}명 · 추가근무 ${won(t.otF)}`)}
     </section>
     <section class="panel">
-      <div class="panel-head"><h2>직원별 급여 <span class="muted small">· ${ui.y}년 ${ui.m}월 (${daysIn(ui.y, ui.m)}일)</span></h2>
+      <div class="panel-head"><h2>직원별 급여 <span class="muted small">· ${ui.y}년 ${ui.m}월 근무분 (${daysIn(ui.y, ui.m)}일) · ${payDate(ui.y, ui.m)}</span></h2>
         <div class="row no-print"><button class="btn sm" data-act="csv">엑셀(CSV) 저장</button><button class="btn sm" data-act="print" ${window.claude ? 'hidden' : ''}>인쇄</button><button class="btn primary sm" data-act="add">+ 직원 추가</button></div></div>
       ${list.length ? `<div class="scroll"><table><thead><tr>${EMP_HEAD}</tr></thead><tbody>${empRows(list)}</tbody>
         <tfoot><tr><td colspan="3">합계</td><td class="num">${won(t.base)}</td><td class="num">${won(t.juhu)}</td><td class="num">${won(t.ot)}</td><td class="num">${won(t.adj)}</td><td class="num">${won(t.total)}</td></tr></tfoot></table></div>
@@ -637,10 +645,10 @@ function renderBreakdown() {
       ${c.weeks.map(w => `<div class="line"><div>${w.start.slice(5).replace('-', '/')} ~ ${w.end.slice(5).replace('-', '/')}<div class="how">근무 ${hrs(w.hours)}${w.pay ? ` → ${hrs(Math.min(w.hours, 40))} ÷ 40 × 8 = ${r1(w.jh)}시간` : ` · ${w.note}`}</div></div><b class="num">${w.pay ? won(w.pay) : '0원'}</b></div>`).join('') || '<p class="muted small">이번 달에 끝나는 주가 없습니다.</p>'}
       <p class="hint" style="margin-top:8px">주 ${DOW[(S.weekStart + 6) % 7]}요일이 속한 달에 그 주 주휴수당을 지급합니다. 40시간 이상은 8시간분이 최대입니다. 결근 등으로 지급하지 않을 주는 달력 오른쪽 "제외"를 체크하세요.</p></div>`;
   } else {
-    left = `<div class="calc"><h3>${ui.m}월 기본급 일할계산 (${c.D}일 기준)</h3>
+    left = `<div class="calc"><h3>${ui.m}월분 기본급 일할계산 (${c.D}일 기준 · ${payDate(ui.y, ui.m)})</h3>
       <div class="line"><div>1일 급여<div class="how">${won(c.M)} ÷ ${c.D}일</div></div><span class="num">${won(c.daily)}</span></div>
-      <div class="line"><div>정상 근무 ${c.nDays}일<div class="how">${won(c.daily)} × ${c.nDays}일</div></div><b class="num">${won(c.baseN)}</b></div>
-      <div class="line"><div>수습 ${c.pDays}일<div class="how">${won(c.daily)} × ${Math.round(c.p * 100)}% × ${c.pDays}일</div></div><b class="num">${won(c.baseP)}</b></div>
+      <div class="line"><div>정상 근무 ${c.nDays}일${c.nDays ? ` <span class="muted small">${md(c.rng.work[0])}~${md(c.rng.work[1])}</span>` : ''}<div class="how">${won(c.daily)} × ${c.nDays}일</div></div><b class="num">${won(c.baseN)}</b></div>
+      <div class="line"><div>수습 ${c.pDays}일${c.pDays ? ` <span class="muted small">${md(c.rng.prob[0])}~${md(c.rng.prob[1])}</span>` : ''}<div class="how">${won(c.daily)} × ${Math.round(c.p * 100)}% × ${c.pDays}일</div></div><b class="num">${won(c.baseP)}</b></div>
       ${c.D - c.nDays - c.pDays ? `<div class="line"><div class="muted">재직 기간 아님 ${c.D - c.nDays - c.pDays}일</div><span class="num muted">0원</span></div>` : ''}
       <div class="line"><div>기본급 소계</div><b class="num">${won(c.base)}</b></div>${c.warns.map(w => `<p class="warn">${w}</p>`).join('')}</div>`;
     right = `<div class="calc"><h3>추가근무 수당 (${S.otRate}배)</h3>
@@ -660,7 +668,7 @@ function renderAll() {
   const all = state.stores.flatMap(s => staffOf(s.id));
   view.innerHTML = `
     <section class="tiles">
-      ${tile(`${ui.y}년 ${ui.m}월 전체 인건비`, won(g.total), `${g.partN + g.fullN}명 · ${state.stores.length}개 매장`, true)}
+      ${tile(`${ui.y}년 ${ui.m}월분 전체 인건비`, won(g.total), `${g.partN + g.fullN}명 · ${payDate(ui.y, ui.m)}`, true)}
       ${per.map(({ s, t }) => tile(esc(s.name), won(t.total), `${g.total ? Math.round(t.total / g.total * 100) : 0}% · ${t.partN + t.fullN}명`)).join('')}
     </section>
     <section class="panel"><div class="panel-head"><h2>매장별 요약</h2>
@@ -685,6 +693,7 @@ function renderSettings() {
         <label class="field"><span>월 소정근로시간 (통상시급 계산) · 보통 209</span><input data-set="stdHours" type="number" value="${S.stdHours}"></label>
         <label class="field"><span>정직원 추가근무 배율</span><input data-set="otRate" type="number" step="0.1" value="${S.otRate}"></label>
         <label class="field"><span>알바 평일 공휴일 근무 배율</span><input data-set="holRate" type="number" step="0.1" min="1" value="${S.holRate}"></label>
+        <label class="field"><span>급여 지급일 (다음 달 며칠)</span><input data-set="payDay" type="number" min="1" max="31" value="${S.payDay}"></label>
         <label class="field"><span>한 주의 시작 요일 (주휴 계산)</span><select data-set="weekStart">${DOW.map((d, i) => `<option value="${i}" ${i === S.weekStart ? 'selected' : ''}>${d}요일 ~ ${DOW[(i + 6) % 7]}요일</option>`).join('')}</select></label>
       </div></section>
     <section class="panel"><div class="panel-head"><h2>${ui.y}년 공휴일 <span class="muted small">· 알바 평일 공휴일 근무 ${S.holRate}배</span></h2>
