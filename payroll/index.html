@@ -382,7 +382,8 @@ async function initCloud() {
     setStatus('계정에서 불러오는 중…');
     const snap = await d.collection(cloud.dir).get();
     const docs = {};
-    for (const x of snap.docs) if (x.exists) { docs[x.id] = x.data(); cloud.last[x.id] = JSON.stringify(x.data()); }
+    // 계정에서 받은 문서는 읽기 전용(동결)이라 그대로 쓰면 수정이 막힘 → 수정 가능한 사본으로 바꿔서 사용
+    for (const x of snap.docs) if (x.exists) { const j = JSON.stringify(x.data()); docs[x.id] = JSON.parse(j); cloud.last[x.id] = j; }
     cloud.db = d;
     if (docs.core) { state = fromDocs(docs); try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} render(); setStatus('내 계정에 저장됨'); }
     else await flushCloud();
@@ -760,7 +761,10 @@ form.addEventListener('change', ev => {
 $('#empCancel').addEventListener('click', () => dlg.close());
 // 저장은 버튼 클릭으로 처리 (폼 제출에 기대지 않음). 문제가 있으면 해당 칸을 빨갛게 표시하고 그 칸으로 이동
 form.addEventListener('submit', ev => { ev.preventDefault(); saveEmp(); });
-$('#empSave').addEventListener('click', () => saveEmp());
+$('#empSave').addEventListener('click', () => {
+  try { saveEmp(); }
+  catch (e) { $('#empErr').textContent = '저장 중 오류가 났습니다: ' + (e && e.message || e); $('#empErr').hidden = false; }
+});
 form.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.tagName === 'INPUT') { ev.preventDefault(); saveEmp(); } });
 form.addEventListener('input', ev => ev.target.classList.remove('bad'));
 function saveEmp() {
@@ -985,6 +989,10 @@ $('#month').addEventListener('change', ev => { const [y, m] = ev.target.value.sp
 const shift = n => { const d = new Date(ui.y, ui.m - 1 + n, 1); ui.y = d.getFullYear(); ui.m = d.getMonth() + 1; render(); };
 $('#prevM').addEventListener('click', () => shift(-1));
 $('#nextM').addEventListener('click', () => shift(1));
+
+// 예상하지 못한 오류도 화면에 보이게 (조용히 실패하지 않도록)
+window.addEventListener('error', ev => { try { toast('오류: ' + (ev.message || '알 수 없는 오류')); } catch (e) {} });
+window.addEventListener('unhandledrejection', ev => { try { toast('오류: ' + ((ev.reason && ev.reason.message) || ev.reason)); } catch (e) {} });
 
 render();
 initCloud();
