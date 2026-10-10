@@ -142,6 +142,7 @@ tbody tr.sel { background: var(--accent-soft); }
 .warn { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 10px; }
 .field { display: grid; gap: 4px; }
 .field > span { font-size: 13px; color: var(--muted); font-weight: 600; }
+.field input.bad, .field select.bad { border-color: var(--warn); background: var(--warn-soft); }
 .field input, .field select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); width: 100%; }
 .adj { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .adj input { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); text-align: right; }
@@ -192,7 +193,7 @@ dialog h2 { font-size: 18px; }
     <p id="askMsg" style="font-weight:600"></p>
     <div class="row" style="justify-content:flex-end">
       <button type="button" class="btn" id="askNo">취소</button>
-      <button type="submit" class="btn primary" id="askYes">확인</button>
+      <button type="button" class="btn primary" id="askYes">확인</button>
     </div>
   </form>
 </dialog>
@@ -228,7 +229,7 @@ dialog h2 { font-size: 18px; }
     <p id="empErr" class="warn" hidden></p>
     <div class="row" style="justify-content:flex-end">
       <button type="button" class="btn" id="empCancel">취소</button>
-      <button type="submit" class="btn primary">저장</button>
+      <button type="button" class="btn primary" id="empSave">저장</button>
     </div>
   </form>
 </dialog>
@@ -757,19 +758,29 @@ form.addEventListener('change', ev => {
   } else if (n === 'probEnd') form.probMonths.value = form.probEnd.value ? guessProbMonths({ hire: form.hire.value, probEnd: form.probEnd.value }) : '0';
 });
 $('#empCancel').addEventListener('click', () => dlg.close());
-form.addEventListener('submit', ev => {
-  ev.preventDefault();
+// 저장은 버튼 클릭으로 처리 (폼 제출에 기대지 않음). 문제가 있으면 해당 칸을 빨갛게 표시하고 그 칸으로 이동
+form.addEventListener('submit', ev => { ev.preventDefault(); saveEmp(); });
+$('#empSave').addEventListener('click', () => saveEmp());
+form.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.tagName === 'INPUT') { ev.preventDefault(); saveEmp(); } });
+form.addEventListener('input', ev => ev.target.classList.remove('bad'));
+function saveEmp() {
   const t = form.type.value, err = $('#empErr');
-  const fail = m => { err.textContent = m; err.hidden = false; };
-  if (!form.name.value.trim()) return fail('이름을 입력하세요.');
-  if (t === 'part' && !(+form.hourly.value > 0)) return fail('시급을 입력하세요.');
-  if (t === 'full' && !(+form.monthly.value > 0)) return fail('월 기본급을 입력하세요.');
-  if (t === 'full' && form.probMonths.value !== '0' && !(+form.probRate.value > 0 && +form.probRate.value <= 100)) return fail('수습 지급률은 1~100% 사이로 입력하세요.');
-  if (form.hire.value && form.leave.value && form.leave.value < form.hire.value) return fail('퇴사일이 입사일보다 빠릅니다.');
+  form.querySelectorAll('.bad').forEach(x => x.classList.remove('bad'));
+  const fail = (m, field) => {
+    err.textContent = m; err.hidden = false;
+    if (field) { field.classList.add('bad'); field.focus(); }
+    err.scrollIntoView({ block: 'nearest' });
+  };
+  if (!form.name.value.trim()) return fail('이름을 입력하세요.', form.name);
+  if (t === 'part' && !(+form.hourly.value > 0)) return fail('시급을 숫자로 입력하세요.', form.hourly);
+  if (t === 'full' && !(+form.monthly.value > 0)) return fail('월 기본급을 숫자로 입력하세요 (예: 2800000).', form.monthly);
+  if (t === 'full' && form.probMonths.value !== '0' && !(+form.probRate.value > 0 && +form.probRate.value <= 100)) return fail('수습 지급률은 1~100 사이 숫자로 입력하세요 (예: 90).', form.probRate);
+  if (form.hire.value && form.leave.value && form.leave.value < form.hire.value) return fail('퇴사일이 입사일보다 빠릅니다.', form.leave);
   if (t === 'full' && form.probMonths.value !== '0') {
-    if (!form.probEnd.value) return fail('수습 종료일을 입력하세요. 입사일을 넣고 개월 수를 고르면 자동으로 채워집니다.');
-    if (form.hire.value && form.probEnd.value < form.hire.value) return fail('수습 종료일이 입사일보다 빠릅니다.');
-    if (form.hire.value && form.probEnd.value > addMonths(form.hire.value, 3)) return fail(`수습은 최대 3개월입니다. 종료일은 ${addMonths(form.hire.value, 3)}까지 정할 수 있습니다.`);
+    if (!form.hire.value && form.probMonths.value !== 'custom') return fail('수습 기간을 계산하려면 입사일을 입력하세요. 입사일을 넣으면 수습 종료일이 자동으로 채워집니다.', form.hire);
+    if (!form.probEnd.value) return fail('수습 종료일을 입력하세요.', form.probEnd);
+    if (form.hire.value && form.probEnd.value < form.hire.value) return fail('수습 종료일이 입사일보다 빠릅니다.', form.probEnd);
+    if (form.hire.value && form.probEnd.value > addMonths(form.hire.value, 3)) return fail(`수습은 최대 3개월입니다. 종료일은 ${addMonths(form.hire.value, 3)}까지 정할 수 있습니다.`, form.probEnd);
   }
   const e = editing || { id: uid() };
   Object.assign(e, {
@@ -784,7 +795,7 @@ form.addEventListener('submit', ev => {
   if (!editing) state.employees.push(e);
   save(); dlg.close();
   ui.tab = e.store; ui.sel = e.id; saveUi(); render();
-});
+}
 
 // ---------- 확인 창 / 알림 (브라우저 기본 confirm·alert 대신) ----------
 function ask(msg, yes = '확인') {
@@ -794,6 +805,7 @@ function ask(msg, yes = '확인') {
   return new Promise(res => {
     const done = v => { d.close(); res(v); };
     $('#askForm').onsubmit = ev => { ev.preventDefault(); done(true); };
+    $('#askYes').onclick = () => done(true);
     $('#askNo').onclick = () => done(false);
     d.oncancel = () => res(false);
     d.showModal(); $('#askNo').focus();
