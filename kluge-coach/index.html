@@ -254,7 +254,10 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
 .del-btn { color: var(--muted); }
 .del-btn:hover { color: var(--reflex); border-color: var(--reflex); }
 .btn.danger { background: var(--reflex); color: var(--accent-ink); }
-.banner-del { margin-left: auto; }
+.banner-del { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tag.old { background: var(--sunken); color: var(--muted); }
+.reanalyze-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; background: var(--sunken); border-radius: 8px; padding: 10px 14px; }
+.reanalyze-bar p { flex: 1 1 16em; }
 @media (max-width: 560px) { .hist-row { grid-template-columns: minmax(0, 1fr); } .hist-row .del { justify-content: flex-start; } }
 .hist-item .meta { font-size: var(--step--1); color: var(--muted); font-variant-numeric: tabular-nums; }
 .hist-item .sum { font-weight: 500; }
@@ -346,6 +349,7 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
   <main id="view-hist" hidden>
     <div class="hist-head" style="margin-top:20px">
       <h2 style="font-size:var(--step-2)">지난 상황들</h2>
+      <div class="reanalyze-bar" id="reanalyze-bar" hidden></div>
       <div class="habits" id="habits"></div>
       <section class="habit-detail" id="habit-detail" aria-live="polite" hidden></section>
     </div>
@@ -745,6 +749,10 @@ const store = {
     else { this.items.unshift({ id, ...rec }); this.saveLocal(); this.emit(); }
     return id;
   },
+  async replace(id, data) {
+    if (this.mode === "db") { await this.col.doc(id).set(data); }
+    else { const i = this.items.findIndex(x => x.id === id); if (i >= 0) this.items[i] = { id, ...data }; this.saveLocal(); this.emit(); }
+  },
   async patch(id, data) {
     if (this.mode === "db") { await this.col.doc(id).update(data); }
     else { const it = this.items.find(i => i.id === id); if (it) Object.assign(it, data); this.saveLocal(); this.emit(); }
@@ -904,7 +912,7 @@ function renderResult(r, inp, opts = {}) {
   const ex = solo ? EXAMPLE_SOLO_INPUT : EXAMPLE_INPUT;
   const banner = h("div", { class: "banner" });
   if (opts.example) banner.append(h("span", { class: "tag example", text: "예시 분석" }), h("span", { text: `'${ex.label}' 사례로 만든 예시예요. 왼쪽에 내 상황을 적고 분석해보세요.` }));
-  else if (opts.recordId) banner.append(h("span", { class: "tag saved", text: opts.when ? fmtDate(opts.when) : "기록에 저장됨" }), h("span", { text: `${solo ? "나 혼자 점검" : str(inp.rel)} · 감정 온도 ${inp.heat}/5` }), h("span", { class: "banner-del" }, deleteControl(opts.recordId)));
+  else if (opts.recordId) banner.append(h("span", { class: "tag saved", text: opts.when ? fmtDate(opts.when) : "기록에 저장됨" }), h("span", { text: `${solo ? "나 혼자 점검" : str(inp.rel)} · 감정 온도 ${inp.heat}/5` }), h("span", { class: "banner-del" }, reanalyzeButton(opts.recordId), deleteControl(opts.recordId)));
   else banner.append(h("span", { class: "note", text: "저장하지 못했어요. 결과는 이 화면에만 남아 있어요." }));
   root.append(banner);
   root.append(h("p", { class: "summary", text: str(r.summary) }));
@@ -1262,7 +1270,75 @@ async function analyze(inp) {
 }
 
 /* ---------- 기록 화면 ---------- */
+/* ---------- 새 기준으로 다시 분석 ---------- */
+const isOldResult = r => !r || !r.norms; // 상식 기준 점검이 없으면 옛 기준 분석
+let batch = null; // { done, total, ctl }
+
+async function reanalyzeRecord(id, signal) {
+  const it = store.items.find(x => x.id === id);
+  if (!it || !it.input) throw { code: "invalid_request" };
+  const r = await sampleFn.json(buildPrompt(it.input), { cache: false, signal });
+  if (!r || typeof r !== "object" || !r.summary) throw { code: "invalid_json" };
+  const { id: _, ...rest } = it;
+  const next = { ...rest, result: r, prevResult: it.result || null, reanalyzedAt: Date.now() };
+  await store.replace(id, next);
+  return next;
+}
+
+function reanalyzeButton(id) {
+  if (!sampleFn) return null;
+  const it = store.items.find(x => x.id === id);
+  const b = h("button", { class: "btn ghost small", type: "button", text: it && isOldResult(it.result) ? "새 기준으로 다시 분석" : "다시 분석" });
+  b.addEventListener("click", async () => {
+    b.disabled = true; b.textContent = "다시 분석 중… 20초~1분";
+    const myRun = ++runId;
+    try {
+      const next = await reanalyzeRecord(id);
+      if (myRun === runId && currentRecordId === id) renderResult(next.result, next.input, { recordId: id, when: next.createdAt, outcome: next.outcome, chat: next.chat });
+    } catch (e) {
+      b.disabled = false; b.textContent = "다시 분석";
+      b.after(h("span", { class: "note", text: errCopy(e) }));
+    }
+  });
+  return b;
+}
+
+function renderReanalyzeBar(items) {
+  const bar = $("#reanalyze-bar");
+  const old = items.filter(it => isOldResult(it.result));
+  if (batch) {
+    const stop = h("button", { class: "btn ghost small", type: "button", text: "멈추기" });
+    stop.addEventListener("click", () => batch && batch.ctl.abort());
+    bar.replaceChildren(h("p", { text: `새 기준으로 다시 분석하는 중… ${batch.done}/${batch.total}` }), stop);
+    bar.hidden = false; return;
+  }
+  if (!old.length || !sampleFn) { bar.replaceChildren(); bar.hidden = true; return; }
+  const go = h("button", { class: "btn small", type: "button", text: `${old.length}개 모두 다시 분석` });
+  go.addEventListener("click", () => runBatch(old.map(it => it.id)));
+  bar.replaceChildren(h("p", { text: `상식 기준 점검이 없는 옛 기준 분석이 ${old.length}개 있어요. 하나씩 차례로 다시 분석해요. 메모와 회고, 이어서 물어본 대화는 그대로 남아요.` }), go);
+  bar.hidden = false;
+}
+
+async function runBatch(ids) {
+  batch = { done: 0, total: ids.length, ctl: new AbortController() };
+  renderReanalyzeBar(store.items);
+  let err = null;
+  for (const id of ids) {
+    if (batch.ctl.signal.aborted) break;
+    try { await reanalyzeRecord(id, batch.ctl.signal); batch.done++; renderReanalyzeBar(store.items); }
+    catch (e) { err = e; break; }
+  }
+  const done = batch.done, total = batch.total;
+  batch = null;
+  renderReanalyzeBar(store.items);
+  const bar = $("#reanalyze-bar");
+  const msg = err && err.code !== "cancelled" ? `${done}/${total}개를 다시 분석하고 멈췄어요. ${errCopy(err)}` : `${done}/${total}개를 새 기준으로 다시 분석했어요.`;
+  bar.prepend(h("p", { class: "note", text: msg }));
+  bar.hidden = false;
+}
+
 function renderHistory(items) {
+  renderReanalyzeBar(items);
   const list = $("#hist");
   list.replaceChildren();
   if (!items.length) {
@@ -1271,7 +1347,7 @@ function renderHistory(items) {
   items.forEach(it => {
     const inp = it.input || {}, r = it.result || {};
     const btn = h("button", { class: "hist-item", type: "button" },
-      h("span", { class: "meta", text: `${fmtDate(it.createdAt)} · ${inp.mode === "solo" ? "나 혼자 점검" : str(inp.rel)} · 온도 ${inp.heat || "-"}/5${it.outcome ? " · 회고 있음" : ""}` }),
+      h("span", { class: "meta", text: `${fmtDate(it.createdAt)} · ${inp.mode === "solo" ? "나 혼자 점검" : str(inp.rel)} · 온도 ${inp.heat || "-"}/5${it.outcome ? " · 회고 있음" : ""}${isOldResult(r) ? " · 옛 기준" : ""}` }),
       h("span", { class: "sum", text: str(r.summary) || str(inp.situation).slice(0, 80) }));
     btn.addEventListener("click", () => {
       runId++; ctl?.abort();
