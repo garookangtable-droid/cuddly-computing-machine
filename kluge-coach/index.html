@@ -97,6 +97,7 @@ textarea { min-height: 70px; }
 .summary { font-weight: 600; font-size: var(--step-2); line-height: 1.5; border-left: 6px solid var(--accent); padding-left: 14px; }
 .sec { display: grid; gap: 12px; }
 .sec > h3 { font-size: var(--step-1); display: flex; align-items: baseline; gap: 10px; }
+.sec > h3 { flex-wrap: wrap; row-gap: 2px; }
 .sec > h3 small { font-family: var(--font-body); font-size: var(--step--1); color: var(--muted); font-weight: 400; }
 .sec.mirror { background: var(--surface); border: 2px solid var(--accent); box-shadow: 6px 6px 0 var(--reflex-soft); border-radius: var(--radius); padding: 18px; }
 .sec.mirror > h3 { color: var(--reflex); }
@@ -143,6 +144,27 @@ ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 3px; }
 .halt h4 { margin: 0; font-size: var(--step--1); color: var(--reflex); }
 .halt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .ego-admit { margin-top: 12px; }
+.norms { display: grid; gap: 14px; }
+.norm-list { display: grid; gap: 12px; }
+.norm-item { display: grid; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.norm-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.norm-level { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: var(--step--1); font-weight: 700; white-space: nowrap; }
+.norm-level.ok { border: 1px solid var(--ink); color: var(--ink); }
+.norm-level.rude { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
+.norm-level.over { background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent); }
+.norm-head b { flex-basis: 100%; }
+.norm-who { font-size: var(--step--1); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; }
+.norm-why { color: var(--muted); }
+.norm-judges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .norm-judges { grid-template-columns: minmax(0, 1fr); } }
+.norm-judge { background: var(--sunken); border-radius: 8px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; justify-items: start; }
+.nj-label { font-size: var(--step--1); font-weight: 600; }
+.resp { display: grid; gap: 6px; }
+.resp-labels { display: flex; justify-content: space-between; font-size: var(--step--1); font-weight: 600; font-variant-numeric: tabular-nums; }
+.resp-title { color: var(--muted); font-weight: 400; }
+.resp-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--sunken); }
+.resp-them { background: var(--ink); }
+.resp-me { background: var(--accent); }
 .verdict { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 600; }
 .verdict.now { background: var(--reason-soft); color: var(--reason); }
 .verdict.wait { background: var(--reflex-soft); color: var(--reflex); }
@@ -523,6 +545,19 @@ const EXAMPLE_RESULT = {
       why: "사장님이 베푼 배려는 사장님에게 생생하지만, B 입장에서는 3년간 쌓은 숙련과 기여가 더 생생합니다. 각자 자기 쪽 장부만 크게 보입니다.",
       reframe: "나도 잘해줬고, B도 3년간 기여했다. 둘 다 '받은 만큼 인정받지 못했다'고 느낄 수 있다." }
   ],
+  norms: {
+    items: [
+      { who: "상대", action: "다른 직원들 앞에서 '같은 돈 받고 일하기 싫다'고 말함", level: "rude",
+        norm: "급여 불만을 동료들 앞에서 드러내는 것은 팀 분위기를 흐리고 사장을 공개적으로 압박하는 행동이라, 한국 직장에서는 보통 예의에 어긋난다고 봅니다. 욕설이나 직접적인 모욕은 없어서 선을 넘은 수준까지는 아닙니다." },
+      { who: "상대", action: "일을 대충 하는 것 같음", level: "rude",
+        norm: "사실이라면 불만을 이유로 맡은 일을 소홀히 하는 것은 기본 직업윤리에 어긋납니다. 다만 아직 구체적인 사례는 확인되지 않았습니다." },
+      { who: "나", action: "'불만 있으면 나가라'고 말하려 함", level: "over",
+        norm: "감정적인 최후통첩은 위협으로 받아들여지고, 사장이라는 위치에서 하면 훨씬 무겁게 들립니다. 대화의 여지를 없애는 말이라 선을 넘습니다." }
+    ],
+    feeling: { verdict: "partly", why: "공개적으로 불만을 표시한 데 불쾌한 건 상식적으로 당연합니다. 다만 '배신'과 '돈만 보는 사람'까지 가는 건 B의 동기를 짐작한 해석이 섞인 부분입니다." },
+    reaction: { verdict: "no", why: "'나가라'는 반응은 상황에 비해 과하고, 문제도 해결하지 못합니다. 불쾌함은 정당해도 이 반응은 부적절합니다." },
+    responsibility: { them: 55, me: 45, why: "불만을 공개적으로 퍼뜨리고 일을 소홀히 한 건 B의 책임입니다. 경력자와 신입의 급여 차이를 설명하지 못한 급여 체계와, 지금 하려는 최후통첩은 사장님 몫입니다." }
+  },
   ego: { level: 2,
     defense: "'직원에게 잘해주는 사장'이라는 내 이미지를 지키고 있습니다. B의 불만이 정당하다고 인정하면 내가 불공정한 사장이 되는 것 같아서, B를 '돈만 보는 사람'으로 낮춰 보고 있습니다.",
     admit: "내가 정한 급여 기준에 3년차가 서운할 만한 빈틈이 있었을 수 있다." },
@@ -602,6 +637,14 @@ const EXAMPLE_SOLO_RESULT = {
       why: "지금의 불안을 줄이는 결정이 다음 달 매출을 더 떨어뜨릴 수 있습니다. 광고를 끊으면 신규 손님이 줄고, 인력을 줄이면 서비스 질이 떨어질 수 있습니다.",
       reframe: "줄일 비용을 정하기 전에, 무엇이 매출을 만드는지부터 확인하자." }
   ],
+  norms: {
+    items: [
+      { who: "나", action: "당장 직원 한 명을 줄이려 함", level: "rude",
+        norm: "충분한 설명이나 예고 없이 갑자기 인원을 줄이면 직원에게 큰 타격이고, 해고 예고 같은 법적 절차도 지켜야 합니다. 결정 자체가 무례한 건 아니지만, 불안한 마음에 급하게 통보하면 선을 넘을 수 있습니다." }
+    ],
+    feeling: { verdict: "partly", why: "매출이 줄면 불안한 건 사장으로서 당연합니다. 다만 '망한다'는 수준의 공포는 확인된 사실에 비해 큽니다." },
+    reaction: { verdict: "no", why: "직원과 광고비를 한 번에 줄이는 건 되돌리기 어렵고, 지금의 숫자만으로는 근거가 부족합니다." }
+  },
   ego: { level: 2,
     defense: "'실패하면 안 되는 사장'이라는 자아상을 지키고 있습니다. 원인을 모르는 불확실한 상태를 견디기 어려워서, '망한다'나 '다 내 탓'처럼 극단적인 결론으로 빨리 정리하려 합니다.",
     admit: "이번 달은 내 예상보다 안 됐고, 아직 원인을 모른다. 모른다는 건 부끄러운 일이 아니다." },
@@ -728,6 +771,13 @@ function buildSoloPrompt(inp) {
   return `너는 뇌과학, 진화심리학, 게리 마커스의 『클루지』(인간의 뇌는 반사적인 옛 시스템 위에 숙고하는 새 시스템이 덧대어진 불완전한 기계라는 관점), 인지행동치료, 행동경제학, SCARF 모델, 철학(스토아, 아리스토텔레스, 칸트)에 밝은 코치다.
 사용자는 사업을 하는 사장이고, 이 도구를 혼자 쓴다. 지금은 다른 사람과의 갈등이 아니라, 혼자 느끼는 기분, 불안, 충동, 내리려는 판단을 점검하려 한다.
 
+[가장 먼저: 사회적 상식과 기본 예의를 기준선으로 세워라]
+심리학적, 진화적 해석보다 먼저, 한국 사회의 보편적인 상식으로 판단하라. 혼자 겪는 일이라도 내가 하려는 행동이 다른 사람(직원, 가족, 거래처 등)에게 영향을 준다면 그 행동이 예의와 절차에 맞는지 점검하라. 기준: 연락하는 시간대와 방식, 갑작스러운 통보, 감정을 남에게 쏟는 것, 약속과 책임, 금전 문제, 사생활 존중. 꼰대식 기준은 쓰지 마라.
+- norms.items: 내가 하려는 행동 중 다른 사람에게 영향을 주는 것을 평가한다. level은 ok(정상 범위), rude(다소 무례함), over(명백히 선을 넘음). norm에 근거 규범을 쓴다. 남에게 영향을 주는 행동이 없으면 빈 배열.
+- norms.feeling: 지금 감정이 상황에 비춰 상식적으로 당연한지(yes, partly, no)와 이유. 당연한 감정을 생각 오류로 몰지 마라.
+- norms.reaction: 하려는 판단이나 행동이 적절한지(yes, partly, no)와 이유.
+- 생각 오류는 감정이 상황에 비해 과하거나, 사실이 아닌 해석이 섞였을 때만 짚는다.
+
 원칙:
 1. 아첨하지 마라. 가장 중요한 임무는 사용자의 생각 오류를 정확히 짚는 것이다. 각 오류는 반드시 사용자가 쓴 문장을 글자 그대로 짧게 인용(quote)해서 근거로 삼아라. 자기 비난(개인화 등)도 오류로 짚어라. 근거 없는 오류를 억지로 만들지 마라. 보통 2~4개.
 2. 공정하라. 불안을 무조건 달래지 마라. 실제로 위험한 부분이 있으면 alarm.real을 정직하게 매기고 분명히 말하라. 좋은 기회라면 미루라고만 하지 마라.
@@ -761,6 +811,7 @@ body.halt 값: hungry, angry, lonely, tired, sick 중 해당하는 것만.
   "facts": ["관찰 가능한 사실"],
   "interpretations": ["사용자의 해석, 예측, 평가"],
   "myErrors": [{"id": "목록의 id", "quote": "사용자 원문 그대로 인용", "why": "왜 오류일 수 있는지", "reframe": "다시 생각해본 문장"}],
+  "norms": {"items": [{"who": "나", "action": "행동 요약", "level": "ok|rude|over", "norm": "판정 근거가 되는 규범"}], "feeling": {"verdict": "yes|partly|no", "why": "이유"}, "reaction": {"verdict": "yes|partly|no", "why": "이유"}},
   "ego": {"level": 0, "defense": "내 자의식(자존심)이 지키려는 것과 그 때문에 생긴 왜곡", "admit": "자의식을 내려놓고 인정할 1인칭 문장"},
   "alarm": {"felt": 0, "real": 0, "why": "느끼는 위험과 실제 위험의 차이 설명"},
   "body": {"halt": [], "note": "몸 상태가 판단에 미치는 영향, 없으면 빈 문자열"},
@@ -780,9 +831,19 @@ function buildPrompt(inp) {
   return `너는 뇌과학, 진화심리학, 게리 마커스의 『클루지』(인간의 뇌는 반사적인 옛 시스템 위에 숙고하는 새 시스템이 덧대어진 불완전한 기계라는 관점), 인지행동치료, SCARF 모델, 철학(스토아, 아리스토텔레스, 칸트), 비폭력대화에 밝은 인간관계 코치다.
 사용자는 사업을 하는 사장이고, 이 도구를 혼자 쓴다. 직원뿐 아니라 친구, 가족, 거래처 등 모든 관계에 쓴다.
 
+[가장 먼저: 사회적 상식과 기본 예의를 기준선으로 세워라]
+심리학적, 진화적 해석보다 먼저, 한국 사회의 보편적인 상식으로 각자의 행동을 평가하라. 기준: 직장 예절, 존댓말과 호칭, 공개적인 비난이나 망신, 약속과 시간 지키기, 연락하는 시간대와 방식, 금전 문제, 사생활 존중, 감사와 사과 같은 기본 매너. 지나치게 보수적이거나 위계를 강요하는 꼰대식 기준은 쓰지 마라(예: 정중한 반대 의견, 정시 퇴근, 업무 외 연락에 바로 답하지 않는 것은 정상 범위).
+- norms.items: 상황에 나온 상대와 나의 행동을 하나씩 평가한다. level은 ok(정상 범위), rude(다소 무례함), over(명백히 선을 넘음) 중 하나. norm에는 판정 근거가 되는 규범을 한두 문장으로 쓴다. 내가 하려는 반응도 평가에 넣어라.
+- norms.feeling: 내 감정이 상식적으로 당연한지(yes, partly, no)와 이유. 상대가 실제로 선을 넘었다면 불쾌감은 정당하다고 분명히 말하라.
+- norms.reaction: 지금 하려는 반응이 적절한지(yes, partly, no)와 이유. 감정이 정당해도 반응은 부적절할 수 있다.
+- norms.responsibility: 이 상황에서 상대와 나의 책임 비율(합 100)과 근거. 근거가 부족하면 50:50 근처로 두고 그렇게 말하라.
+- 상대가 선을 넘은 데 대한 비례적인 감정은 생각 오류(myErrors)로 분류하지 마라. 생각 오류는 감정이 상황에 비해 과하거나, 사실이 아닌 해석이 섞였을 때만 짚는다.
+- 상대 입장 설명(theirBrain)은 '왜 그랬는지 이해'하는 것이지 '그래도 괜찮다'는 면죄가 아니다. 무례한 행동을 그럴 만한 이유가 있다며 감싸지 마라. 상대가 책임져야 할 행동은 boundary에 명확히 적어라.
+- 내가 예의에 어긋나는 행동을 했거나 하려 한다면 그것도 정확히 짚어라. 나도 상대도 무조건 탓하지 마라.
+
 원칙:
 1. 아첨하지 마라. 사용자 편을 드는 것이 아니라, 사용자 자신의 생각 오류를 정확히 짚어주는 것이 가장 중요한 임무다. 각 오류는 반드시 사용자가 쓴 문장을 글자 그대로 짧게 인용(quote)해서 근거로 삼아라. 근거 없는 오류를 억지로 만들지 마라. 보통 2~4개.
-2. 공정하라. 상대의 행동에 실제 문제가 있다면 boundary에 분명히 말하라. 사용자가 늘 틀렸다고 몰아가지 마라.
+2. 공정하라. 상대의 행동에 실제 문제가 있다면 boundary에 '그럼에도 상대가 책임져야 할 행동'으로 분명히 말하라. 사용자가 늘 틀렸다고 몰아가지 마라.
 3. 사실(누가 봐도 관찰 가능한 것)과 해석(사용자의 추측, 평가)을 분리하라.
 4. 진화적, 뇌과학적 설명은 '그래서 정당하다'가 아니라 '그래서 그렇게 강하게 느껴진다'는 이해의 도구로 써라. 근거가 있는 연구나 현상만 언급하라.
 5. 상대의 독백(monologue)은 가장 그럴듯한 하나의 가능성을 상대의 1인칭 구어체로 3~5문장.
@@ -811,6 +872,7 @@ SCARF 영역(위협 강도 0=없음 ~ 3=강함): status 지위, certainty 확실
   "facts": ["관찰 가능한 사실"],
   "interpretations": ["사용자의 해석이나 추측"],
   "myErrors": [{"id": "목록의 id", "quote": "사용자 원문 그대로 인용", "why": "왜 오류일 수 있는지", "reframe": "다시 생각해본 문장"}],
+  "norms": {"items": [{"who": "상대 또는 나", "action": "행동 요약", "level": "ok|rude|over", "norm": "판정 근거가 되는 규범"}], "feeling": {"verdict": "yes|partly|no", "why": "이유"}, "reaction": {"verdict": "yes|partly|no", "why": "이유"}, "responsibility": {"them": 50, "me": 50, "why": "근거"}},
   "ego": {"level": 0, "defense": "내 자의식(자존심)이 지키려는 것과 그 때문에 생긴 왜곡", "admit": "자의식을 내려놓고 인정할 1인칭 문장"},
   "myBrain": {"scarf": {"status": 0, "certainty": 0, "autonomy": 0, "relatedness": 0, "fairness": 0}, "kluge": "사용자의 옛 뇌가 왜 이렇게 반응하는지 진화적, 뇌과학적 설명"},
   "theirBrain": {"scarf": {"status": 0, "certainty": 0, "autonomy": 0, "relatedness": 0, "fairness": 0}, "kluge": "상대의 반응을 설명하는 진화적, 뇌과학적 설명", "monologue": "상대의 1인칭 속마음", "needs": ["상대가 원하는 것"], "theirErrors": [{"id": "목록의 id", "why": "상대가 빠졌을 수 있는 생각 오류"}]},
@@ -847,6 +909,8 @@ function renderResult(r, inp, opts = {}) {
   root.append(banner);
   root.append(h("p", { class: "summary", text: str(r.summary) }));
   root.append(renderMirror(r));
+  const nm = renderNorms(r.norms, solo);
+  if (nm) root.append(nm);
   const eg = renderEgo(r.ego);
   if (eg) root.append(eg);
 
@@ -878,6 +942,50 @@ function renderMirror(r) {
       e.reframe ? h("p", { class: "reframe" }, h("b", { text: "다시 보면 " }), str(e.reframe)) : null));
   });
   return mirror;
+}
+
+/* 상식 기준 점검: 심리 해석 전에 사회적 상식과 기본 예의로 먼저 보기 */
+const NORM_LEVEL = { ok: "정상 범위", rude: "다소 무례함", over: "명백히 선을 넘음" };
+const NORM_VERDICT = { yes: "당연해요", partly: "일부는 당연해요", no: "과해요" };
+const NORM_REACTION = { yes: "적절해요", partly: "일부 조정이 필요해요", no: "부적절해요" };
+function renderNorms(n, solo) {
+  if (!n) return null;
+  const items = arr(n.items).filter(it => it && it.action);
+  const fe = n.feeling || {}, re = n.reaction || {}, rs = n.responsibility;
+  if (!items.length && !fe.why && !re.why) return null;
+  const sec = h("section", { class: "sec" },
+    h("h3", {}, "상식 기준 점검", h("small", { text: "심리 해석 전에 상식과 예의로 먼저" })));
+  const box = h("div", { class: "brains norms" });
+  if (items.length) box.append(h("div", { class: "norm-list" }, items.map(it => {
+    const lv = NORM_LEVEL[it.level] ? it.level : "ok";
+    return h("div", { class: "norm-item" },
+      h("div", { class: "norm-head" },
+        h("span", { class: "norm-level " + lv, text: NORM_LEVEL[lv] }),
+        h("span", { class: "norm-who", text: str(it.who) }),
+        h("b", { text: str(it.action) })),
+      it.norm ? h("p", { class: "norm-why", text: str(it.norm) }) : null);
+  })));
+  else if (solo) box.append(h("p", { class: "note", text: "이번 일에는 다른 사람에게 영향을 주는 행동이 없어요." }));
+  const judge = (label, v, map, why) => why ? h("div", { class: "norm-judge" },
+    h("span", { class: "nj-label", text: label }),
+    map[v] ? h("span", { class: "verdict " + (v === "yes" ? "now" : v === "no" ? "wait" : "info"), text: map[v] }) : null,
+    h("p", { text: str(why) })) : null;
+  box.append(h("div", { class: "norm-judges" },
+    judge("내 감정은 상식적으로 당연한가", fe.verdict, NORM_VERDICT, fe.why),
+    judge("지금 하려는 반응은 적절한가", re.verdict, NORM_REACTION, re.why)));
+  if (!solo && rs && (rs.them != null || rs.me != null)) {
+    let th = Math.max(0, Math.min(100, Math.round(Number(rs.them) || 0)));
+    let me = Math.max(0, Math.min(100, Math.round(Number(rs.me) || 0)));
+    if (th + me === 0) th = me = 50;
+    const tp = Math.round(th / (th + me) * 100);
+    box.append(h("div", { class: "resp" },
+      h("div", { class: "resp-labels" }, h("span", { text: `상대 ${tp}` }), h("span", { class: "resp-title", text: "책임 비율" }), h("span", { text: `나 ${100 - tp}` })),
+      h("div", { class: "resp-bar", role: "img", "aria-label": `상대 ${tp}, 나 ${100 - tp}` },
+        h("span", { class: "resp-them", style: `width:${tp}%` }), h("span", { class: "resp-me", style: `width:${100 - tp}%` })),
+      rs.why ? h("p", { class: "norm-why", text: str(rs.why) }) : null));
+  }
+  sec.append(box);
+  return sec;
 }
 
 /* 『역행자』의 자의식 해체 */
@@ -933,7 +1041,8 @@ function renderRelBody(root, r) {
         h("div", { class: "me" }, h("h4", { text: "내 옛 뇌가 반응하는 이유 · 유전자 오작동" }), h("p", { text: str(my.kluge) })),
         h("div", { class: "them" }, h("h4", { text: "상대의 옛 뇌가 반응하는 이유" }), h("p", { text: str(th.kluge) }))))));
 
-  const theirSec = h("section", { class: "sec" }, h("h3", {}, "상대의 자리에서", h("small", { text: "가장 그럴듯한 하나의 가능성" })));
+  const theirSec = h("section", { class: "sec" }, h("h3", {}, "상대의 자리에서", h("small", { text: "가장 그럴듯한 하나의 가능성" })),
+    h("p", { class: "note", text: "왜 그랬는지 이해하기 위한 설명이에요. 그래도 괜찮다는 뜻은 아니에요." }));
   if (th.monologue) theirSec.append(h("p", { class: "monologue", text: str(th.monologue) }));
   if (arr(th.needs).length) theirSec.append(h("div", {}, h("p", { class: "note", text: "상대가 원하는 것" }), listOrNone(th.needs)));
   const terrs = arr(th.theirErrors);
@@ -944,7 +1053,7 @@ function renderRelBody(root, r) {
 
   root.append(renderPhilosophy(r.philosophy));
   root.append(renderActions(r.actions, (r.actions || {}).scripts, "이렇게 말해보세요"));
-  if (r.boundary) root.append(h("section", { class: "sec" }, h("h3", { text: "지켜야 할 선" }), h("p", { class: "boundary", text: str(r.boundary) })));
+  if (r.boundary) root.append(h("section", { class: "sec" }, h("h3", {}, "지켜야 할 선", h("small", { text: "이해와 별개로, 상대가 책임질 부분" })), h("p", { class: "boundary", text: str(r.boundary) })));
 }
 
 /* 나 혼자 점검 */
@@ -989,6 +1098,12 @@ function renderSoloBody(root, r) {
 }
 
 /* ---------- 후속 질문 ---------- */
+function normsContext(n) {
+  if (!n) return "";
+  const items = arr(n.items).map(it => `${str(it.who)}: ${str(it.action)} → ${NORM_LEVEL[it.level] || str(it.level)}`).join(" / ");
+  const rs = n.responsibility ? ` 책임 비율 상대 ${n.responsibility.them} : 나 ${n.responsibility.me}` : "";
+  return `[상식 기준 점검] ${items} 감정: ${str((n.feeling || {}).verdict)} 반응: ${str((n.reaction || {}).verdict)}${rs}`;
+}
 function renderChat(r, inp, opts) {
   const turns = arr(opts.chat).slice();
   const log = h("div", { class: "chat" });
@@ -1011,11 +1126,15 @@ function renderChat(r, inp, opts) {
       ? `너는 클루지(진화적으로 덧대어진 뇌), 뇌과학, 심리학, 행동경제학, 철학에 밝은 코치다. 사용자는 혼자 느끼는 기분, 불안, 판단을 점검하고 있다. 아첨하지 말고, 필요하면 사용자의 생각 오류도 짚어라. 자해나 자살 생각이 보이면 자살예방상담전화 109(24시간), 정신건강위기상담 1577-0199를 안내하라. 짧고 구체적인 한국어로 답하라. 마크다운 기호는 쓰지 마라.
 [상태] ${inp.situation}
 [감정] ${inp.feeling} / [머릿속 생각] ${inp.guess} / [내리려는 판단] ${inp.want}
-[앞서 한 분석 요약] ${str(r.summary)} 판단: ${str((r.decision || {}).verdict)} ${str((r.decision || {}).reason)}`
+[앞서 한 분석 요약] ${str(r.summary)} 판단: ${str((r.decision || {}).verdict)} ${str((r.decision || {}).reason)}
+${normsContext(r.norms)}
+답할 때도 심리 해석보다 먼저 한국 사회의 보편적인 상식과 기본 예의를 기준으로 삼아라. 당연한 감정은 당연하다고 말하고, 내 행동이 다른 사람에게 예의에 어긋나면 분명히 짚어라. 꼰대식 기준은 쓰지 마라.`
       : `너는 클루지(진화적으로 덧대어진 뇌), 뇌과학, 심리학, 철학에 밝은 인간관계 코치다. 아첨하지 말고, 필요하면 사용자의 생각 오류도 짚어라. 짧고 구체적인 한국어로 답하라. 마크다운 기호는 쓰지 마라.
 [상황] 관계: ${inp.rel} / ${inp.situation}
 [사용자 감정] ${inp.feeling} / [사용자의 짐작] ${inp.guess} / [하고 싶은 반응] ${inp.want}
-[앞서 한 분석 요약] ${str(r.summary)} 입장 차이: ${str(r.gap)} 지켜야 할 선: ${str(r.boundary)}`;
+[앞서 한 분석 요약] ${str(r.summary)} 입장 차이: ${str(r.gap)} 지켜야 할 선: ${str(r.boundary)}
+${normsContext(r.norms)}
+답할 때도 심리 해석보다 먼저 한국 사회의 보편적인 상식과 기본 예의를 기준으로 삼아라. 상대가 선을 넘었다면 이해와 별개로 책임을 분명히 말하고, 비례적인 감정은 생각 오류로 몰지 마라. 내가 예의에 어긋났다면 그것도 짚어라. 꼰대식 기준은 쓰지 마라.`;
     try {
       const { text } = await sampleFn([{ role: "user", content: context }, ...turns.slice(-10)], {
         cache: false, onText: ({ text }) => { bubble.textContent = text; }
